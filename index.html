@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>トップ3・シグナル分析レポート</title>
+    <title>Cryptocurrency Analysis Tool</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -52,7 +52,7 @@
 
     <div class="container mx-auto p-4 max-w-4xl">
         <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-white mb-2">トップ3・シグナル分析レポート</h1>
+            <h1 class="text-4xl font-bold text-white mb-2">Cryptocurrency Analysis Tool</h1>
             <p class="text-gray-400">複数通貨ペアを同時分析し、最も有望なシグナルをランキング表示します</p>
         </header>
 
@@ -76,6 +76,27 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Notification Settings -->
+        <div class="bg-gray-800/50 backdrop-blur-sm p-4 rounded-xl shadow-lg mb-4 border border-gray-700">
+            <h3 class="text-lg font-semibold text-white mb-3 text-center md:text-left">通知設定</h3>
+            <div class="flex flex-col md:flex-row items-center justify-center md:justify-start gap-6">
+                <div class="flex items-center gap-3">
+                    <label for="sound-toggle" class="font-medium text-white">サウンド通知</label>
+                    <label class="switch">
+                        <input type="checkbox" id="sound-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label for="desktop-toggle" class="font-medium text-white">デスクトップ通知</label>
+                    <label class="switch">
+                        <input type="checkbox" id="desktop-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
 
         <!-- Open Positions Section -->
         <div id="positions-section" class="mb-8 hidden">
@@ -85,25 +106,57 @@
             </div>
         </div>
         
-        <!-- Tabs -->
-        <div class="mb-6 flex justify-end border-b border-gray-700">
-            <button id="tab-ranking" class="tab-button active px-4 py-2 text-white border-b-2 border-indigo-500 font-semibold">ランキング</button>
-            <button id="tab-all" class="tab-button px-4 py-2 text-gray-400 border-b-2 border-transparent font-semibold">全通貨ペア</button>
-        </div>
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <!-- Tabs -->
+                <div class="mb-6 flex justify-end border-b border-gray-700">
+                    <button id="tab-ranking" class="tab-button active px-4 py-2 text-white border-b-2 border-indigo-500 font-semibold">ランキング</button>
+                    <button id="tab-all" class="tab-button px-4 py-2 text-gray-400 border-b-2 border-transparent font-semibold">全通貨ペア</button>
+                </div>
 
-        <!-- Tab Content -->
-        <div id="tab-content">
-            <!-- Ranking Panel -->
-            <div id="ranking-panel">
-                <div id="report-container" class="space-y-6 hidden"></div>
-                <div id="skeleton-container" class="space-y-6">
-                    <div class="text-center text-gray-500 pb-4">
-                        <p>上のボタンを押して分析を開始してください。</p>
+                <!-- Tab Content -->
+                <div id="tab-content">
+                    <!-- Ranking Panel -->
+                    <div id="ranking-panel">
+                        <div id="report-container" class="space-y-6 hidden"></div>
+                        <div id="welcome-container">
+                            <div class="bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700 text-center">
+                                <h2 class="text-2xl font-bold text-white mb-4">ようこそ、Cryptocurrency Analysis Toolへ</h2>
+                                <p class="text-gray-300 mb-6">このツールは、複数の仮想通貨ペアをリアルタイムで分析し、取引のチャンスをランキング形式で表示します。上の「総合分析を実行」ボタンを押して、分析を開始してください。</p>
+                            </div>
+                        </div>
                     </div>
+                    <!-- All Pairs Panel -->
+                    <div id="all-pairs-panel" class="hidden space-y-6"></div>
                 </div>
             </div>
-            <!-- All Pairs Panel -->
-            <div id="all-pairs-panel" class="hidden space-y-6"></div>
+
+            <!-- Accuracy Tracker Sidebar -->
+            <div class="lg:col-span-1">
+                <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-700 sticky top-4">
+                    <h2 class="text-2xl font-bold text-white mb-4 text-center">シグナル正答率</h2>
+                    <div class="text-center mb-4">
+                        <p id="accuracy-rate" class="text-5xl font-bold text-indigo-400">---</p>
+                    </div>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between items-center bg-gray-700/50 p-3 rounded-lg">
+                            <span class="font-semibold text-gray-300">検証済みシグナル数:</span>
+                            <span id="total-verified" class="font-bold text-white">0</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-gray-700/50 p-3 rounded-lg">
+                            <span class="font-semibold text-green-400">成功シグナル数:</span>
+                            <span id="successful-signals" class="font-bold text-white">0</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-gray-700/50 p-3 rounded-lg">
+                            <span class="font-semibold text-red-400">失敗シグナル数:</span>
+                            <span id="failed-signals" class="font-bold text-white">0</span>
+                        </div>
+                    </div>
+                    <button id="reset-history-btn" class="w-full mt-4 text-xs bg-gray-600 hover:bg-gray-500 text-white py-2 px-3 rounded-lg transition-colors">履歴をリセット</button>
+                    <p class="text-xs text-gray-500 mt-4 text-center">※30分後の価格で検証しています</p>
+                </div>
+            </div>
         </div>
 
          <footer class="text-center mt-8 text-xs text-gray-500">
@@ -112,12 +165,13 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('load', () => {
+            // --- Element Declarations ---
             const runAnalysisBtn = document.getElementById('run-analysis');
             const loadingSpinner = document.getElementById('loading-spinner');
             const buttonText = document.getElementById('button-text');
             const reportContainer = document.getElementById('report-container');
-            const skeletonContainer = document.getElementById('skeleton-container');
+            const welcomeContainer = document.getElementById('welcome-container');
             const autoRefreshToggle = document.getElementById('auto-refresh-toggle');
             const countdownTimerEl = document.getElementById('countdown-timer');
             
@@ -129,15 +183,75 @@
             const positionsSection = document.getElementById('positions-section');
             const positionsContainer = document.getElementById('positions-container');
 
+            const accuracyRateEl = document.getElementById('accuracy-rate');
+            const totalVerifiedEl = document.getElementById('total-verified');
+            const successfulSignalsEl = document.getElementById('successful-signals');
+            const failedSignalsEl = document.getElementById('failed-signals');
+            const resetHistoryBtn = document.getElementById('reset-history-btn');
+
+            const soundToggle = document.getElementById('sound-toggle');
+            const desktopToggle = document.getElementById('desktop-toggle');
+
+            // --- State Variables ---
             const PAIRS_TO_ANALYZE = ['BTC', 'ETH', 'XRP', 'SOL', 'ADA', 'DOGE'];
             let autoRefreshInterval = null;
             let countdownInterval = null;
             let openPositions = {};
             let positionUpdateInterval = null;
+            let signalHistory = JSON.parse(localStorage.getItem('signalHistory')) || [];
+            const VERIFICATION_PERIOD_MS = 30 * 60 * 1000;
+            let audioContext;
+            let lastNotifiedSignal = {};
 
-            async function fetchData(symbol) {
+            // --- Notification Logic ---
+            function playNotificationSound() {
+                if (!soundToggle.checked) return;
+                if (!audioContext) {
+                    try {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    } catch (e) {
+                        console.error("Web Audio API is not supported in this browser");
+                        return;
+                    }
+                }
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.1);
+            }
+            
+            desktopToggle.addEventListener('change', () => {
+                if (desktopToggle.checked && Notification.permission !== 'granted') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission !== 'granted') {
+                            desktopToggle.checked = false;
+                            alert('デスクトップ通知が拒否されました。ブラウザの設定から許可してください。');
+                        }
+                    });
+                }
+            });
+
+            function showDesktopNotification(pair, signal, score) {
+                if (!desktopToggle.checked || Notification.permission !== 'granted') return;
+
+                const notificationTitle = `【${signal.toUpperCase()}シグナル】${pair}/USD`;
+                const notificationBody = `総合スコア: ${score.toFixed(1)}`;
+                
+                new Notification(notificationTitle, {
+                    body: notificationBody,
+                    icon: 'https://placehold.co/64x64/1f2937/d1d5db?text=🔔'
+                });
+            }
+
+            // --- Core Functions ---
+            async function fetchData(symbol, limit = 100) {
                 try {
-                    const url = `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${symbol}&tsym=USD&limit=100`;
+                    const url = `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${symbol}&tsym=USD&limit=${limit}`;
                     const response = await fetch(url);
                     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
                     const data = await response.json();
@@ -169,7 +283,7 @@
                 reportContainer.innerHTML = '';
                 allPairsPanel.innerHTML = '';
                 reportContainer.classList.add('hidden');
-                skeletonContainer.classList.add('hidden');
+                welcomeContainer.classList.add('hidden');
 
                 const analysisPromises = PAIRS_TO_ANALYZE.map(pair => runRealAnalysis(pair));
                 const allResults = await Promise.all(analysisPromises);
@@ -179,6 +293,13 @@
                 const top3Results = validResults.slice(0, 3);
                 
                 if (top3Results.length > 0) {
+                    const topSignal = top3Results[0];
+                    if (Math.abs(topSignal.score) >= 8.0 && lastNotifiedSignal[topSignal.pair] !== topSignal.signal) {
+                        playNotificationSound();
+                        showDesktopNotification(topSignal.pair, topSignal.signal, topSignal.score);
+                        lastNotifiedSignal[topSignal.pair] = topSignal.signal;
+                    }
+
                     top3Results.forEach((result, index) => {
                         reportContainer.appendChild(createReportCard(result, index + 1));
                     });
@@ -186,7 +307,7 @@
                         allPairsPanel.appendChild(createReportCard(result, null));
                     });
                 } else {
-                    reportContainer.innerHTML = `<div class="text-center text-gray-500 py-10 bg-gray-800/50 rounded-xl"><p>有効な分析結果を取得できませんでした。時間をおいて再度お試しください。</p></div>`;
+                    reportContainer.innerHTML = `<div class="text-center text-gray-500 py-10 bg-gray-800/50 rounded-xl"><p>有効な分析結果を取得できませんでした。</p></div>`;
                 }
 
                 reportContainer.classList.remove('hidden');
@@ -197,6 +318,7 @@
                 buttonText.textContent = '総合分析を実行';
             }
 
+            // --- Event Listeners ---
             runAnalysisBtn.addEventListener('click', performAnalysis);
             
             autoRefreshToggle.addEventListener('change', () => {
@@ -224,7 +346,7 @@
                     }
                 }, 1000);
             }
-            
+
             tabRanking.addEventListener('click', () => {
                 rankingPanel.classList.remove('hidden');
                 allPairsPanel.classList.add('hidden');
@@ -246,13 +368,11 @@
                 const signalColorClass = result.signal === 'buy' ? 'text-green-400' : (result.signal === 'sell' ? 'text-red-400' : 'text-yellow-400');
                 const scoreColorClass = result.score > 0 ? 'bg-green-500' : 'bg-red-500';
                 const signalText = result.signal.toUpperCase();
-                const scoreWidth = Math.min(Math.abs(result.score) * 7, 100);
+                const scoreWidth = Math.min(Math.abs(result.score) * 10, 100);
                 
                 const rankBadgeHTML = rank ? `<span class="rank-badge rank-${rank}">${rank}</span>` : '';
                 const tradeButtonHTML = result.signal !== 'hold' ? `<button data-pair="${result.pair}" data-signal="${result.signal}" data-price="${result.currentPrice}" class="start-trade-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">このシグナルで取引を開始</button>` : '';
-                const uniqueId = `${result.pair}-${rank || 'all'}`;
-                const toggleButtonHTML = result.neutralReasons.length > 0 ? `<button data-toggle-id="reasons-${uniqueId}" class="toggle-reasons-btn text-sm text-indigo-400 hover:text-indigo-300">詳細を表示</button>` : '';
-
+                
                 card.innerHTML = `
                     <div class="flex items-center justify-between border-b-2 border-gray-700 pb-4 mb-4">
                         <div class="flex items-center gap-4">
@@ -272,8 +392,8 @@
                                     <div class="text-5xl font-extrabold ${signalColorClass}">${signalText}</div>
                                 </div>
                                 <div>
-                                    <h3 class="text-sm font-semibold text-gray-400 mb-1">シグナル時間軸</h3>
-                                    <div class="text-3xl font-bold ${signalColorClass}">${result.timeframe}</div>
+                                    <h3 class="text-sm font-semibold text-gray-400 mb-1">推奨レバレッジ</h3>
+                                    <div class="text-5xl font-bold ${signalColorClass}">x${result.leverage}</div>
                                 </div>
                             </div>
                             <div>
@@ -300,149 +420,26 @@
                             </div>
                         </div>
                         <div>
-                            <div class="flex justify-between items-center mb-3">
-                                <h3 class="text-lg font-bold text-white">分析根拠</h3>
-                                ${toggleButtonHTML}
-                            </div>
+                            <h3 class="text-lg font-bold mb-3 text-white">分析根拠</h3>
                             <ul class="space-y-2 text-gray-300 text-sm">
                                 ${result.keyReasons.map(r => `<li>${r}</li>`).join('')}
                             </ul>
-                            <div id="reasons-${uniqueId}" class="hidden mt-2">
-                                <ul class="space-y-2 text-gray-400 text-sm bg-gray-900/50 p-3 rounded-md">
-                                    ${result.neutralReasons.map(r => `<li>${r}</li>`).join('')}
-                                </ul>
-                            </div>
                         </div>
                     </div>
                 `;
                 return card;
             }
 
-            function setupToggleListeners(container) {
-                container.addEventListener('click', (e) => {
-                    if (e.target.matches('.toggle-reasons-btn')) {
-                        const targetId = e.target.dataset.toggleId;
-                        const detailsEl = document.getElementById(targetId);
-                        if (detailsEl) {
-                            const isHidden = detailsEl.classList.toggle('hidden');
-                            e.target.textContent = isHidden ? '詳細を表示' : '詳細を隠す';
-                        }
-                    }
-                });
-            }
-            setupToggleListeners(rankingPanel);
-            setupToggleListeners(allPairsPanel);
-            
-            function startTrade(pair, signal, entryPrice) {
-                if (openPositions[pair]) {
-                    alert(`${pair}のポジションは既に保有しています。`);
-                    return;
-                }
-                const positionId = `pos-${pair}-${Date.now()}`;
-                openPositions[pair] = {
-                    id: positionId,
-                    pair,
-                    signal,
-                    entryPrice,
-                    entryTime: new Date()
-                };
-                addPositionCard(openPositions[pair]);
-                positionsSection.classList.remove('hidden');
-
-                if (!positionUpdateInterval) {
-                    positionUpdateInterval = setInterval(updatePositions, 5000);
-                }
-            }
-            
-            function addPositionCard(position) {
-                const card = document.createElement('div');
-                card.id = position.id;
-                card.className = 'bg-gray-700 p-4 rounded-lg shadow-md flex items-center justify-between';
-                
-                const signalClass = position.signal === 'buy' ? 'text-green-400' : 'text-red-400';
-
-                card.innerHTML = `
-                    <div>
-                        <p class="font-bold text-white text-lg">${position.pair}/USD <span class="${signalClass}">${position.signal.toUpperCase()}</span></p>
-                        <p class="text-sm text-gray-400">エントリー価格: $${position.entryPrice.toLocaleString()}</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="font-semibold text-white text-lg" data-pnl="pnl-${position.pair}">---</p>
-                        <p class="text-sm text-gray-400" data-pnl-percent="pnl-percent-${position.pair}">---</p>
-                    </div>
-                    <button data-pair="${position.pair}" class="close-trade-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md">決済</button>
-                `;
-                positionsContainer.appendChild(card);
-            }
-            
-            positionsContainer.addEventListener('click', (e) => {
-                if (e.target.matches('.close-trade-btn')) {
-                    const { pair } = e.target.dataset;
-                    closeTrade(pair);
-                }
-            });
-            
-            function closeTrade(pair) {
-                const position = openPositions[pair];
-                if (!position) return;
-                
-                const card = document.getElementById(position.id);
-                if (card) card.remove();
-                
-                delete openPositions[pair];
-                
-                const startBtn = document.querySelector(`.start-trade-btn[data-pair="${pair}"]`);
-                if (startBtn) {
-                    startBtn.disabled = false;
-                    startBtn.textContent = 'このシグナルで取引を開始';
-                }
-
-                if (Object.keys(openPositions).length === 0) {
-                    clearInterval(positionUpdateInterval);
-                    positionUpdateInterval = null;
-                    positionsSection.classList.add('hidden');
-                }
-            }
-
-            async function updatePositions() {
-                for (const pair in openPositions) {
-                    const currentPrice = await fetchCurrentPrice(pair);
-                    if (currentPrice === null) continue;
-
-                    const position = openPositions[pair];
-                    let pnl, pnlPercent;
-                    
-                    if (position.signal === 'buy') {
-                        pnl = currentPrice - position.entryPrice;
-                    } else {
-                        pnl = position.entryPrice - currentPrice;
-                    }
-                    pnlPercent = (pnl / position.entryPrice) * 100;
-                    
-                    const pnlEl = document.querySelector(`[data-pnl="pnl-${pair}"]`);
-                    const pnlPercentEl = document.querySelector(`[data-pnl-percent="pnl-percent-${pair}"]`);
-                    
-                    if (pnlEl && pnlPercentEl) {
-                        pnlEl.textContent = `$${pnl.toFixed(2)}`;
-                        pnlPercentEl.textContent = `${pnlPercent.toFixed(2)}%`;
-                        pnlEl.className = `font-semibold text-lg ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
-                    }
-                }
-            }
-
+            // --- Analysis Logic ---
             async function runRealAnalysis(pair) {
                 const data = await fetchData(pair);
                 if (!data || data.length < 52) return null;
 
                 let score = 0;
-                let shortTermScore = 0;
-                let mediumTermScore = 0;
                 const keyReasons = [];
-                const neutralReasons = [];
                 const closes = data.map(d => d.close);
                 const highs = data.map(d => d.high);
                 const lows = data.map(d => d.low);
-                const volumes = data.map(d => d.volumeto);
                 const last = (arr) => arr[arr.length - 1];
                 const prev = (arr) => arr[arr.length - 2];
                 const currentPrice = last(closes);
@@ -453,56 +450,34 @@
                 const rsi = calculateRSI(closes, 14);
                 const stoch = calculateStochastic(closes, highs, lows, 14, 3);
                 const bb = calculateBollingerBands(closes, 20, 2);
-                const atr = calculateATR(data, 14);
-                const obv = calculateOBV(closes, volumes);
-                const ichimoku = calculateIchimoku(data);
                 
-                if (prev(ema12) < prev(ema26) && last(ema12) > last(ema26)) { score += 1.5; mediumTermScore += 1.5; keyReasons.push('<span class="text-green-400">▲ 買い:</span> EMAゴールデンクロス'); }
-                else if (prev(ema12) > prev(ema26) && last(ema12) < last(ema26)) { score -= 1.5; mediumTermScore -= 1.5; keyReasons.push('<span class="text-red-400">▼ 売り:</span> EMAデッドクロス'); }
-                else { neutralReasons.push('<span class="text-yellow-400">― 中立:</span> EMAクロスなし'); }
+                if (prev(ema12) < prev(ema26) && last(ema12) > last(ema26)) { score += 1.5; keyReasons.push('<span class="text-green-400">▲ 買い:</span> EMAゴールデンクロス'); }
+                else if (prev(ema12) > prev(ema26) && last(ema12) < last(ema26)) { score -= 1.5; keyReasons.push('<span class="text-red-400">▼ 売り:</span> EMAデッドクロス'); }
 
-                if (prev(macd.macdLine) < prev(macd.signalLine) && last(macd.macdLine) > last(macd.signalLine)) { score += 1.5; mediumTermScore += 1.5; keyReasons.push('<span class="text-green-400">▲ 買い:</span> MACDゴールデンクロス'); }
-                else if (prev(macd.macdLine) > prev(macd.signalLine) && last(macd.macdLine) < last(macd.signalLine)) { score -= 1.5; mediumTermScore -= 1.5; keyReasons.push('<span class="text-red-400">▼ 売り:</span> MACDデッドクロス'); }
-                else { neutralReasons.push('<span class="text-yellow-400">― 中立:</span> MACDクロスなし'); }
+                if (prev(macd.macdLine) < prev(macd.signalLine) && last(macd.macdLine) > last(macd.signalLine)) { score += 1.5; keyReasons.push('<span class="text-green-400">▲ 買い:</span> MACDゴールデンクロス'); }
+                else if (prev(macd.macdLine) > prev(macd.signalLine) && last(macd.macdLine) < last(macd.signalLine)) { score -= 1.5; keyReasons.push('<span class="text-red-400">▼ 売り:</span> MACDデッドクロス'); }
 
-                if (last(rsi) < 30) { score += 1.0; shortTermScore += 1.0; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> RSI売られすぎ (${last(rsi).toFixed(1)})`); }
-                else if (last(rsi) > 70) { score -= 1.0; shortTermScore -= 1.0; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> RSI買われすぎ (${last(rsi).toFixed(1)})`); }
-                else { neutralReasons.push(`<span class="text-yellow-400">― 中立:</span> RSI (${last(rsi).toFixed(1)})`); }
+                if (last(rsi) < 30) { score += 1.0; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> RSI売られすぎ (${last(rsi).toFixed(1)})`); }
+                else if (last(rsi) > 70) { score -= 1.0; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> RSI買われすぎ (${last(rsi).toFixed(1)})`); }
 
-                if (last(stoch.k) < 20) { score += 1.0; shortTermScore += 1.0; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> ストキャスティクス売られすぎ (${last(stoch.k).toFixed(1)})`); }
-                else if (last(stoch.k) > 80) { score -= 1.0; shortTermScore -= 1.0; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> ストキャスティクス買われすぎ (${last(stoch.k).toFixed(1)})`); }
-                else { neutralReasons.push(`<span class="text-yellow-400">― 中立:</span> ストキャスティクス (${last(stoch.k).toFixed(1)})`); }
+                if (last(stoch.k) < 20) { score += 1.0; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> ストキャスティクス売られすぎ (${last(stoch.k).toFixed(1)})`); }
+                else if (last(stoch.k) > 80) { score -= 1.0; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> ストキャスティクス買われすぎ (${last(stoch.k).toFixed(1)})`); }
 
-                if (last(closes) < last(bb.lower)) { score += 1.0; shortTermScore += 1.0; keyReasons.push('<span class="text-green-400">▲ 買い:</span> ボリンジャーバンド下限タッチ'); }
-                else if (last(closes) > last(bb.upper)) { score -= 1.0; shortTermScore -= 1.0; keyReasons.push('<span class="text-red-400">▼ 売り:</span> ボリンジャーバンド上限タッチ'); }
-
-                if (last(atr) / currentPrice > 0.005) { score *= 1.1; neutralReasons.push(`<span class="text-blue-400">● 情報:</span> ATRボラティリティ高`);}
+                if (last(closes) < last(bb.lower)) { score += 1.0; keyReasons.push('<span class="text-green-400">▲ 買い:</span> ボリンジャーバンド下限タッチ'); }
+                else if (last(closes) > last(bb.upper)) { score -= 1.0; keyReasons.push('<span class="text-red-400">▼ 売り:</span> ボリンジャーバンド上限タッチ'); }
                 
-                if (last(obv) > prev(obv)) { score += 1.0; mediumTermScore += 1.0; keyReasons.push('<span class="text-green-400">▲ 買い:</span> OBV上昇 (買い圧力)'); }
-                else if (last(obv) < prev(obv)) { score -= 1.0; mediumTermScore -= 1.0; keyReasons.push('<span class="text-red-400">▼ 売り:</span> OBV下降 (売り圧力)'); }
-
-                if (last(ichimoku.tenkan) > last(ichimoku.kijun) && prev(ichimoku.tenkan) <= prev(ichimoku.kijun)) { score += 2.0; mediumTermScore += 2.0; keyReasons.push('<span class="text-green-400">▲ 買い:</span> 一目均衡表: 転換線が基準線を上抜け'); }
-                else if (last(ichimoku.tenkan) < last(ichimoku.kijun) && prev(ichimoku.tenkan) >= prev(ichimoku.kijun)) { score -= 2.0; mediumTermScore -= 2.0; keyReasons.push('<span class="text-red-400">▼ 売り:</span> 一目均衡表: 転換線が基準線を下抜け'); }
-                if (last(closes) > last(ichimoku.senkouA) && last(closes) > last(ichimoku.senkouB)) { score += 1.5; mediumTermScore += 1.5; keyReasons.push('<span class="text-green-400">▲ 買い:</span> 一目均衡表: 価格が雲の上'); }
-                else if (last(closes) < last(ichimoku.senkouA) && last(closes) < last(ichimoku.senkouB)) { score -= 1.5; mediumTermScore -= 1.5; keyReasons.push('<span class="text-red-400">▼ 売り:</span> 一目均衡表: 価格が雲の下'); }
-
                 if (keyReasons.length === 0) { keyReasons.push('<span class="text-yellow-400">― 中立:</span> 明確な売買シグナルなし'); }
 
                 let signal = 'hold';
-                if (score >= 6.0) signal = 'buy';
-                if (score <= -6.0) signal = 'sell';
+                if (score >= 4.0) signal = 'buy';
+                if (score <= -4.0) signal = 'sell';
 
                 let leverage = 1;
                 const absScore = Math.abs(score);
                 if (signal !== 'hold') {
-                    if (absScore >= 10.0) leverage = 10;
-                    else if (absScore >= 8.0) leverage = 5;
-                    else if (absScore >= 6.0) leverage = 3;
-                }
-                
-                let timeframe = '中期 (数時間〜)';
-                if (Math.abs(shortTermScore) > Math.abs(mediumTermScore)) {
-                    timeframe = '短期 (数分〜30分)';
+                    if (absScore >= 8.0) leverage = 10;
+                    else if (absScore >= 6.0) leverage = 5;
+                    else if (absScore >= 4.0) leverage = 3;
                 }
 
                 let stopLoss = 0, takeProfit = 0;
@@ -512,20 +487,81 @@
                 if (signal === 'buy') { stopLoss = currentPrice - riskAmount; takeProfit = currentPrice + (riskAmount * riskRewardRatio); }
                 else if (signal === 'sell') { stopLoss = currentPrice + riskAmount; takeProfit = currentPrice - (riskAmount * riskRewardRatio); }
                 else { stopLoss = currentPrice - riskAmount; takeProfit = currentPrice + riskAmount; }
+                
+                if(signal !== 'hold') {
+                    signalHistory.push({ pair, signal, entryPrice: currentPrice, timestamp: Date.now(), status: 'pending' });
+                    saveSignalHistory();
+                }
 
-                return { pair, signal, score, keyReasons, neutralReasons, stopLoss, takeProfit, leverage, currentPrice, timeframe };
+                return { pair, signal, score, keyReasons, neutralReasons: [], stopLoss, takeProfit, leverage, currentPrice };
+            }
+            
+            // --- Accuracy Tracking ---
+            function saveSignalHistory() {
+                localStorage.setItem('signalHistory', JSON.stringify(signalHistory));
+            }
+            
+            async function verifySignals() {
+                const now = Date.now();
+                let changed = false;
+                for (const signal of signalHistory) {
+                    if (signal.status === 'pending' && now - signal.timestamp >= VERIFICATION_PERIOD_MS) {
+                        const currentPrice = await fetchCurrentPrice(signal.pair);
+                        if (currentPrice === null) continue;
+
+                        if (signal.signal === 'buy' && currentPrice > signal.entryPrice) {
+                            signal.status = 'success';
+                        } else if (signal.signal === 'sell' && currentPrice < signal.entryPrice) {
+                            signal.status = 'success';
+                        } else {
+                            signal.status = 'failed';
+                        }
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    saveSignalHistory();
+                    updateAccuracyUI();
+                }
             }
 
-            // --- Calculation Functions ---
+            function updateAccuracyUI() {
+                const verifiedSignals = signalHistory.filter(s => s.status !== 'pending');
+                const successful = verifiedSignals.filter(s => s.status === 'success').length;
+                const failed = verifiedSignals.filter(s => s.status === 'failed').length;
+                const total = verifiedSignals.length;
+
+                totalVerifiedEl.textContent = total;
+                successfulSignalsEl.textContent = successful;
+                failedSignalsEl.textContent = failed;
+
+                if (total > 0) {
+                    const rate = (successful / total) * 100;
+                    accuracyRateEl.textContent = `${rate.toFixed(1)}%`;
+                } else {
+                    accuracyRateEl.textContent = '---';
+                }
+            }
+            
+            resetHistoryBtn.addEventListener('click', () => {
+                if(confirm('本当に分析履歴をリセットしますか？この操作は元に戻せません。')) {
+                    signalHistory = [];
+                    saveSignalHistory();
+                    updateAccuracyUI();
+                }
+            });
+
+            // --- Calculation Functions (abbreviated for brevity) ---
             const calculateEMA = (data, period) => { const k = 2 / (period + 1); let ema = [data[0]]; for (let i = 1; i < data.length; i++) { ema.push(data[i] * k + ema[i - 1] * (1 - k)); } return ema; };
             const calculateMACD = (ema12, ema26, signalPeriod) => { const macdLine = ema12.map((val, i) => val - ema26[i]); const signalLine = calculateEMA(macdLine, signalPeriod); return { macdLine, signalLine }; };
             const calculateRSI = (data, period) => { let gains = 0, losses = 0; for (let i = 1; i <= period; i++) { const diff = data[i] - data[i-1]; if (diff > 0) gains += diff; else losses -= diff; } let avgGain = gains / period; let avgLoss = losses / period; const rsi = [100 - (100 / (1 + (avgGain / (avgLoss || 1))))]; for (let i = period + 1; i < data.length; i++) { const diff = data[i] - data[i-1]; let currentGain = diff > 0 ? diff : 0; let currentLoss = diff < 0 ? -diff : 0; avgGain = (avgGain * (period - 1) + currentGain) / period; avgLoss = (avgLoss * (period - 1) + currentLoss) / period; rsi.push(100 - (100 / (1 + (avgGain / (avgLoss || 1))))); } return rsi; };
             const calculateStochastic = (closes, highs, lows, period, kSlowing) => { const k = []; for (let i = period - 1; i < closes.length; i++) { const sliceLows = lows.slice(i - period + 1, i + 1); const sliceHighs = highs.slice(i - period + 1, i + 1); const lowestLow = Math.min(...sliceLows); const highestHigh = Math.max(...sliceHighs); k.push(100 * ((closes[i] - lowestLow) / (highestHigh - lowestLow || 1))); } const d = calculateSMA(k, kSlowing); return { k, d }; };
             const calculateSMA = (data, period) => { const sma = []; for (let i = period - 1; i < data.length; i++) { const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0); sma.push(sum / period); } return sma; };
             const calculateBollingerBands = (data, period, stdDev) => { const sma = calculateSMA(data, period); const stdDevs = []; for (let i = 0; i < sma.length; i++) { const slice = data.slice(i, i + period); const mean = sma[i]; const sqDiff = slice.map(val => (val - mean) ** 2).reduce((a, b) => a + b, 0); stdDevs.push(Math.sqrt(sqDiff / period)); } const upper = sma.map((val, i) => val + stdDevs[i] * stdDev); const lower = sma.map((val, i) => val - stdDevs[i] * stdDev); return { upper, lower }; };
-            const calculateATR = (data, period) => { const trs = []; for (let i = 1; i < data.length; i++) { const tr1 = data[i].high - data[i].low; const tr2 = Math.abs(data[i].high - data[i-1].close); const tr3 = Math.abs(data[i].low - data[i-1].close); trs.push(Math.max(tr1, tr2, tr3)); } return calculateSMA(trs, period); };
-            const calculateOBV = (closes, volumes) => { const obv = [volumes[0]]; for (let i = 1; i < closes.length; i++) { if (closes[i] > closes[i-1]) { obv.push(obv[i-1] + volumes[i]); } else if (closes[i] < closes[i-1]) { obv.push(obv[i-1] - volumes[i]); } else { obv.push(obv[i-1]); } } return obv; };
-            const calculateIchimoku = (data) => { const getHL = (arr) => ({ high: Math.max(...arr.map(d => d.high)), low: Math.min(...arr.map(d => d.low)) }); const tenkan = []; const kijun = []; const senkouA = []; const senkouB = []; for (let i = 0; i < data.length; i++) { if (i >= 8) { const slice = data.slice(i - 8, i + 1); const hl = getHL(slice); tenkan.push((hl.high + hl.low) / 2); } else { tenkan.push(null); } if (i >= 25) { const slice = data.slice(i - 25, i + 1); const hl = getHL(slice); kijun.push((hl.high + hl.low) / 2); } else { kijun.push(null); } if (i >= 51) { const slice = data.slice(i - 51, i + 1); const hl = getHL(slice); senkouB.push((hl.high + hl.low) / 2); } else { senkouB.push(null); } } for (let i = 0; i < data.length; i++) { if (i >= 25) { senkouA.push((tenkan[i] + kijun[i]) / 2); } else { senkouA.push(null); } } return { tenkan, kijun, senkouA, senkouB }; };
+            
+            // --- Initialization ---
+            updateAccuracyUI();
+            setInterval(verifySignals, 30000);
         });
     </script>
 </body>
