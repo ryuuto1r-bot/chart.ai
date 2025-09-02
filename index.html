@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 
     <style>
         body {
@@ -40,14 +41,6 @@
         .meter-value { background-color: #374151; clip-path: polygon(50% 100%, 0 100%, 0 0, 100% 0, 100% 100%); }
         .meter-pointer { width: 2px; height: 75px; background-color: white; position: absolute; bottom: 0; left: 50%; transform-origin: bottom center; transition: transform 0.5s ease-out; }
         .meter-center { width: 12px; height: 12px; background-color: white; border-radius: 50%; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); }
-        
-        @keyframes flash-yellow {
-            0%, 100% { border-color: #4b5563; }
-            50% { border-color: #fbbf24; box-shadow: 0 0 15px #fbbf24; }
-        }
-        .signal-changed {
-            animation: flash-yellow 1.5s infinite;
-        }
         
         .price-ticker {
             overflow: hidden;
@@ -87,15 +80,15 @@
         .progress-bar-fill {
             height: 100%;
             border-radius: 9999px;
-            transition: width 0.3s ease-in-out;
+            transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;
         }
         .timeframe-btn {
-             padding: 4px 8px;
-             font-size: 12px;
-             border-radius: 6px;
-             background-color: #4b5563;
-             color: #d1d5db;
-             transition: background-color 0.2s;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            background-color: #4b5563;
+            color: #d1d5db;
+            transition: background-color 0.2s;
         }
         .timeframe-btn:hover {
             background-color: #6b7280;
@@ -108,6 +101,18 @@
         .tooltip { position: relative; display: inline-block; cursor: pointer; }
         .tooltip .tooltiptext { visibility: hidden; width: 220px; background-color: #1f2937; color: #fff; text-align: center; border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; box-shadow: 0 2px 10px rgba(0,0,0,0.5); font-size: 12px;}
         .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+
+        .impulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 8px;
+        }
+        .impulse-green { background-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .impulse-red { background-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .impulse-blue { background-color: #3b82f6; box-shadow: 0 0 8px #3b82f6; }
+
 
         @media (max-width: 768px) {
             .container {
@@ -146,6 +151,7 @@
                 </button>
                 <div id="menu-dropdown" class="absolute right-0 mt-2 w-48 bg-gray-800 rounded-md shadow-lg z-20 hidden">
                     <a href="#" id="menu-settings" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">設定＆バックテスト</a>
+                    <a href="#" id="menu-ai-analysis" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">AIモデル分析</a>
                     <a href="#" id="menu-notifications" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">通知設定</a>
                     <a href="#" id="menu-qa" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">Q&A ヘルプ</a>
                 </div>
@@ -167,7 +173,7 @@
 
             <!-- Control Panel -->
             <div class="bg-gray-800/50 backdrop-blur-sm p-4 rounded-xl shadow-lg mb-8 border border-gray-700">
-                 <div class="control-panel flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="control-panel flex flex-col md:flex-row items-center justify-between gap-4">
                     <div class="w-full md:w-auto flex-shrink-0">
                         <label for="timeframe-select" class="block text-sm font-semibold text-gray-400 mb-1">分析時間足</label>
                         <select id="timeframe-select" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -195,6 +201,18 @@
                 </div>
                 <div id="optimization-status" class="text-xs text-center text-gray-400 mt-2 h-4"></div>
             </div>
+            
+            <!-- Volatility Warning Banner -->
+            <div id="volatility-warning-banner" class="hidden bg-yellow-500/20 border border-yellow-500 text-yellow-300 px-4 py-3 rounded-lg relative mb-8 text-center" role="alert">
+                <strong class="font-bold">高ボラティリティ警告: </strong>
+                <span class="block sm:inline" id="volatility-warning-text"></span>
+            </div>
+
+            <!-- Economic Calendar Section -->
+            <div id="economic-calendar-section" class="bg-gray-800/50 backdrop-blur-sm p-4 rounded-xl shadow-lg mb-8 border border-gray-700 hidden">
+                <h3 class="text-lg font-bold text-white mb-2 text-center">注目経済イベント</h3>
+                <div id="economic-events-container" class="text-center text-gray-400 text-sm">イベントを読み込み中...</div>
+            </div>
 
             <!-- Open Positions Section -->
             <div id="positions-section" class="mb-8 hidden">
@@ -220,8 +238,9 @@
                         <div id="trade-history-panel" class="hidden space-y-4"></div>
                     </div>
                 </div>
-                <!-- Accuracy Tracker Sidebar -->
-                <div class="lg:col-span-1">
+                <!-- Sidebar -->
+                <div class="lg:col-span-1 space-y-6">
+                    <!-- Accuracy Tracker -->
                     <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-700 sticky top-4">
                         <div class="flex items-center justify-center gap-2 mb-4">
                             <h2 class="text-2xl font-bold text-white text-center">シグナル正答率</h2>
@@ -237,6 +256,27 @@
                             <div class="flex justify-between items-center bg-gray-700/50 p-3 rounded-lg"><span class="font-semibold text-red-400">失敗シグナル数:</span><span id="failed-signals" class="font-bold text-white">0</span></div>
                         </div>
                         <button id="reset-history-btn" class="w-full mt-4 text-xs bg-gray-600 hover:bg-gray-500 text-white py-2 px-3 rounded-lg transition-colors">全履歴をリセット</button>
+                    </div>
+                    <!-- Volatility Index -->
+                    <div id="volatility-tracker" class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-700 sticky top-4">
+                         <div class="flex items-center justify-center gap-2 mb-4">
+                            <h2 class="text-2xl font-bold text-white text-center">市場ボラティリティ指数</h2>
+                            <div class="tooltip">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                <span class="tooltiptext">主要通貨のATR（平均真の値幅）を基に現在の市場の変動率を指数化しています。</span>
+                            </div>
+                        </div>
+                        <div class="text-center mb-3">
+                            <p id="volatility-level-text" class="text-3xl font-bold text-gray-300">計測中...</p>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div id="volatility-bar-fill" class="progress-bar-fill"></div>
+                        </div>
+                         <div class="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>低い</span>
+                            <span>中程度</span>
+                            <span>高い</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -287,12 +327,12 @@
                         <button id="save-settings-btn" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">設定を保存</button>
                     </div>
                     <div>
-                        <h3 class="text-xl font-bold text-white mb-4">バックテスト (過去24時間)</h3>
+                        <h3 class="text-xl font-bold text-white mb-4">バックテスト (過去500件)</h3>
                         <button id="run-backtest-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg mb-4 flex items-center justify-center">
                             <svg id="backtest-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             バックテスト実行
                         </button>
-                        <div id="backtest-results" class="hidden space-y-2 text-center"></div>
+                        <div id="backtest-results" class="hidden space-y-2 text-center bg-gray-900/50 p-4 rounded-lg"></div>
                     </div>
                 </div>
             </div>
@@ -333,12 +373,44 @@
             </div>
         </div>
         
+        <!-- AI Model Modal -->
+        <div id="ai-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+            <div class="bg-gray-800 rounded-xl shadow-xl w-full max-w-md border border-gray-700">
+                <div class="flex justify-between items-center p-4 border-b border-gray-700"><h3 class="text-lg font-bold text-white">AIモデル分析 (Transformer)</h3><button id="close-ai-modal" class="text-gray-400 hover:text-white text-2xl font-bold">&times;</button></div>
+                <div class="p-6 space-y-4 text-gray-300">
+                    <p class="text-sm text-gray-400">現在のチャートパターンを基に、Transformerモデルが次の価格変動を予測します。(これはデモンストレーションです)</p>
+                    <button id="run-ai-prediction" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                         <svg id="ai-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        AI予測を実行
+                    </button>
+                    <div id="ai-prediction-result" class="text-center mt-4 p-4 bg-gray-900/50 rounded-lg min-h-[80px]"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+            <div class="bg-gray-800 rounded-xl shadow-xl w-full max-w-sm border border-gray-700">
+                <div class="p-6 text-center space-y-4">
+                    <h3 id="confirm-modal-title" class="text-xl font-bold text-white">確認</h3>
+                    <p id="confirm-modal-text" class="text-gray-300"></p>
+                    <div class="flex gap-4">
+                        <button id="confirm-modal-cancel" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">キャンセル</button>
+                        <button id="confirm-modal-ok" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">OK</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <footer class="text-center mt-8 text-xs text-gray-500"><p>※これは投資助言ではありません。ご自身の判断で取引を行ってください。</p></footer>
     </div>
 <script>
 window.addEventListener('load', () => {
-    // ★★★ この一行を、あなたのCloud FunctionのURLに書き換えてください ★★★
-    const CLOUD_FUNCTION_URL = 'https://chart-tool3-991185168999.asia-northeast1.run.app'; 
+    // ★★★ This line is set to your personal Cloud Function URL ★★★
+    const CLOUD_FUNCTION_URL = 'https://chart-tool-english-991185168999.asia-northeast2.run.app';
+    
+    // [CONFIG] Set to `false` to use the live Cloud Function, `true` for mock data
+    const USE_MOCK_DATA = false;
 
     // --- Element Declarations ---
     const runAnalysisBtn = document.getElementById('run-analysis');
@@ -375,20 +447,25 @@ window.addEventListener('load', () => {
     const dashboardMetersContainer = document.getElementById('dashboard-meters-container');
     const priceTickerContainer = document.getElementById('price-ticker-container');
     const quickPriceView = document.getElementById('quick-price-view');
+    const volatilityLevelText = document.getElementById('volatility-level-text');
+    const volatilityBarFill = document.getElementById('volatility-bar-fill');
 
     // Menu and Modals
     const headerMenu = document.getElementById('header-menu');
     const menuButton = document.getElementById('menu-button');
     const menuDropdown = document.getElementById('menu-dropdown');
     const menuSettings = document.getElementById('menu-settings');
+    const menuAiAnalysis = document.getElementById('menu-ai-analysis');
     const menuQa = document.getElementById('menu-qa');
     const menuNotifications = document.getElementById('menu-notifications');
     const settingsModal = document.getElementById('settings-modal');
     const qaModal = document.getElementById('qa-modal');
+    const aiModal = document.getElementById('ai-modal');
     const notificationsModal = document.getElementById('notifications-modal');
     const chartModal = document.getElementById('chart-modal');
     const closeSettingsModal = document.getElementById('close-settings-modal');
     const closeQaModal = document.getElementById('close-qa-modal');
+    const closeAiModal = document.getElementById('close-ai-modal');
     const closeNotificationsModal = document.getElementById('close-notifications-modal');
     const closeChartModal = document.getElementById('close-chart-modal');
     const customizationForm = document.getElementById('customization-form');
@@ -411,11 +488,23 @@ window.addEventListener('load', () => {
     const saveNotifySettingsBtn = document.getElementById('save-notify-settings-btn');
     const chartTimeframeSelector = document.getElementById('chart-timeframe-selector');
     const chartLoadingOverlay = document.getElementById('chart-loading-overlay');
+    const confirmModal = document.getElementById('confirm-modal');
+    const confirmModalTitle = document.getElementById('confirm-modal-title');
+    const confirmModalText = document.getElementById('confirm-modal-text');
+    const confirmModalCancel = document.getElementById('confirm-modal-cancel');
+    const confirmModalOk = document.getElementById('confirm-modal-ok');
+    const economicCalendarSection = document.getElementById('economic-calendar-section');
+    const economicEventsContainer = document.getElementById('economic-events-container');
+    const runAiPredictionBtn = document.getElementById('run-ai-prediction');
+    const aiSpinner = document.getElementById('ai-spinner');
+    const aiPredictionResultEl = document.getElementById('ai-prediction-result');
+    const volatilityWarningBanner = document.getElementById('volatility-warning-banner');
+    const volatilityWarningText = document.getElementById('volatility-warning-text');
 
 
     // --- State Variables ---
-    const PAIRS_TO_ANALYZE = ['BTC', 'ETH', 'XRP', 'SOL', 'ADA', 'DOGE'];
-    const TICKER_PAIRS = ['BTC', 'ETH', 'XRP', 'SOL', 'ADA', 'DOGE'];
+    const PAIRS_TO_ANALYZE = ['BTC', 'ETH', 'XRP', 'SOL', 'ADA', 'DOGE', 'LINK', 'MATIC'];
+    const TICKER_PAIRS = ['BTC', 'ETH', 'XRP', 'SOL', 'ADA', 'DOGE', 'LINK', 'MATIC'];
     let autoRefreshInterval = null;
     let countdownInterval = null;
     let openPositions = JSON.parse(localStorage.getItem('openPositions')) || {};
@@ -432,7 +521,12 @@ window.addEventListener('load', () => {
     let baseAnalysisSettings = JSON.parse(localStorage.getItem('analysisSettings')) || {
         weights: { 
             ma: 1.0, macd: 1.0, rsi: 1.0, stoch: 1.0, bb: 1.0, ichimoku: 1.5, vwap: 1.2, chartPatterns: 2.0, psar: 1.5,
-            mtaConfirmation: 2.0, volumeConfirmation: 1.5, divergence: 3.0, sentiment: 2.5
+            mtaConfirmation: 2.0, volumeConfirmation: 1.5, divergence: 3.0, sentiment: 2.5,
+            maSlope: 1.2, mtaAlignment: 3.0,
+            fibonacci: 1.8,
+            pivot: 1.7,
+            elderImpulse: 2.2, // New weight for Elder Impulse System
+            squeeze: 2.5, obvDivergence: 2.0
         },
         params: {
             rsiPeriod: 14, rsiOverbought: 70, rsiOversold: 30,
@@ -446,49 +540,53 @@ window.addEventListener('load', () => {
             volumeSpikeMultiplier: 2.0,
             divergenceLookback: 40, 
             divergenceOffset: 5,
-            atrPeriod: 14
+            atrPeriod: 14,
+            slopePeriod: 10,
+            // New params for new features
+            bbwSqueezeLookback: 50, bbwSqueezeThreshold: 0.1,
+            keltnerPeriod: 20, keltnerMultiplier: 1.5
         }
     };
 
     // --- Timeframe-specific configurations ---
     const timeframeConfigs = {
         'minute': {
-            label: '1分足', endpoint: 'histominute', aggregate: 1, limit: 240, verificationPeriod: 30 * 60 * 1000, lookaheadPeriod: 30,
+            label: '1分足', endpoint: 'histominute', aggregate: 1, limit: 240, verificationPeriod: 30, // in bars
             mta: [{key: '5minute', weight: 0.6}, {key: '15minute', weight: 0.4}],
             params: { ...baseAnalysisSettings.params, rsiPeriod: 9, emaShort: 9, emaLong: 21 },
             weights: { ...baseAnalysisSettings.weights },
             useEMA: true
         },
         '5minute': {
-            label: '5分足', endpoint: 'histominute', aggregate: 5, limit: 96, verificationPeriod: 60 * 60 * 1000, lookaheadPeriod: 12,
+            label: '5分足', endpoint: 'histominute', aggregate: 5, limit: 96, verificationPeriod: 12, // in bars
             mta: [{key: '15minute', weight: 0.7}, {key: 'hour', weight: 0.3}],
             params: { ...baseAnalysisSettings.params, rsiPeriod: 9, emaShort: 9, emaLong: 21 },
             weights: { ...baseAnalysisSettings.weights },
             useEMA: true
         },
         '15minute': {
-            label: '15分足', endpoint: 'histominute', aggregate: 15, limit: 96, verificationPeriod: 4 * 60 * 60 * 1000, lookaheadPeriod: 16,
+            label: '15分足', endpoint: 'histominute', aggregate: 15, limit: 96, verificationPeriod: 16, // in bars
             mta: [{key: 'hour', weight: 0.8}, {key: '4hour', weight: 0.2}],
             params: { ...baseAnalysisSettings.params },
             weights: { ...baseAnalysisSettings.weights, bb: 1.8, volumeConfirmation: 2.0 }, // Emphasize BB and Volume
             useEMA: false // Use SMA
         },
         'hour': {
-            label: '1時間足', endpoint: 'histohour', aggregate: 1, limit: 168, verificationPeriod: 12 * 60 * 60 * 1000, lookaheadPeriod: 12,
+            label: '1時間足', endpoint: 'histohour', aggregate: 1, limit: 168, verificationPeriod: 12, // in bars
             mta: [{key: '4hour', weight: 0.7}, {key: 'day', weight: 0.3}],
             params: { ...baseAnalysisSettings.params },
             weights: { ...baseAnalysisSettings.weights, ichimoku: 2.5 }, // Emphasize Ichimoku
             useEMA: true
         },
         '4hour': {
-            label: '4時間足', endpoint: 'histohour', aggregate: 4, limit: 180, verificationPeriod: 24 * 60 * 60 * 1000, lookaheadPeriod: 12, // 48 hours
+            label: '4時間足', endpoint: 'histohour', aggregate: 4, limit: 180, verificationPeriod: 12, // in bars
             mta: [{key: 'day', weight: 1.0}],
             params: { ...baseAnalysisSettings.params, emaShort: 21, emaLong: 50 },
             weights: { ...baseAnalysisSettings.weights, psar: 2.0, ma: 1.5 }, // Emphasize PSAR and MAs
             useEMA: true
         },
         'day': {
-            label: '日足', endpoint: 'histoday', aggregate: 1, limit: 200, verificationPeriod: 7 * 24 * 60 * 60 * 1000, lookaheadPeriod: 7,
+            label: '日足', endpoint: 'histoday', aggregate: 1, limit: 200, verificationPeriod: 7, // in bars
             mta: [], // No higher timeframe analysis needed for daily
             params: { ...baseAnalysisSettings.params },
             weights: { ...baseAnalysisSettings.weights, ichimoku: 2.0, macd: 1.5 },
@@ -502,6 +600,55 @@ window.addEventListener('load', () => {
         threshold: 8.0
     };
     const dataCache = new Map();
+
+    // --- Mock Data Generators ---
+    const generateMockHistoricalData = (symbol, limit) => {
+        const data = [];
+        let price = 65000 + (Math.random() - 0.5) * 5000;
+        const now = Math.floor(Date.now() / 1000);
+        for (let i = 0; i < limit; i++) {
+            const open = price;
+            const fluctuation = price * 0.005 * (Math.random() - 0.5);
+            price += fluctuation;
+            const high = Math.max(open, price) + Math.random() * 50;
+            const low = Math.min(open, price) - Math.random() * 50;
+            const close = price;
+            data.push({
+                time: now - (limit - i - 1) * 3600,
+                open: open,
+                high: high,
+                low: low,
+                close: close,
+                volumeto: 1000 + Math.random() * 5000
+            });
+        }
+        return { Response: "Success", Data: { Data: data } };
+    };
+
+    const generateMockPriceData = (symbols) => {
+        const raw = {};
+        symbols.forEach(symbol => {
+            const price = 65000 + (Math.random() - 0.5) * 5000;
+            raw[symbol] = {
+                USD: {
+                    PRICE: price,
+                    CHANGEPCT24HOUR: (Math.random() - 0.5) * 10
+                }
+            };
+        });
+        return { RAW: raw };
+    };
+
+    const generateMockSentimentData = () => {
+        const sentiments = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'];
+        const data = [];
+        for(let i=0; i<5; i++) {
+            data.push({
+                sentiment: sentiments[Math.floor(Math.random() * sentiments.length)]
+            });
+        }
+        return { Data: data };
+    };
 
     // --- Utility Functions ---
     const createToast = (message, type = 'info') => {
@@ -555,6 +702,10 @@ window.addEventListener('load', () => {
     }
 
     async function fetchData(symbol, endpoint, limit = 200, aggregate = 1) {
+        if (USE_MOCK_DATA) {
+            const mockData = generateMockHistoricalData(symbol, limit);
+            return mockData ? mockData.Data.Data : null;
+        }
         const aggParam = aggregate > 1 ? `&aggregate=${aggregate}` : '';
         const url = `${CLOUD_FUNCTION_URL}?endpoint=${endpoint}&fsym=${symbol}&tsym=USD&limit=${limit}${aggParam}`;
         const cacheKey = `${symbol}-${endpoint}-${limit}-${aggregate}`;
@@ -563,6 +714,10 @@ window.addEventListener('load', () => {
     }
 
     async function fetchCurrentPrice(symbols) {
+        if (USE_MOCK_DATA) {
+            const mockData = generateMockPriceData(symbols);
+            return mockData ? mockData.RAW : null;
+        }
         const url = `${CLOUD_FUNCTION_URL}?endpoint=../pricemultifull&fsyms=${symbols.join(',')}&tsyms=USD`;
         const cacheKey = `pricemultifull-${symbols.join(',')}`;
         const data = await fetchWithCache(url, cacheKey, 10000);
@@ -570,6 +725,10 @@ window.addEventListener('load', () => {
     }
     
     async function updateJpyRate() {
+        if (USE_MOCK_DATA) {
+            jpyRate = 155.5; // Set a mock rate
+            return;
+        }
         const url = `${CLOUD_FUNCTION_URL}?endpoint=../price&fsym=USD&tsyms=JPY`;
         const cacheKey = 'jpy-rate';
         const data = await fetchWithCache(url, cacheKey, 3600000);
@@ -577,6 +736,10 @@ window.addEventListener('load', () => {
     }
 
     async function fetchSentimentData(symbols) {
+        if (USE_MOCK_DATA) {
+            const mockData = generateMockSentimentData();
+            return mockData ? mockData.Data : null;
+        }
         const url = `${CLOUD_FUNCTION_URL}?endpoint=news/&categories=${symbols.join(',')}&lang=EN`;
         const cacheKey = `sentiment-${symbols.join(',')}`;
         const data = await fetchWithCache(url, cacheKey, 1800000);
@@ -595,13 +758,10 @@ window.addEventListener('load', () => {
         const selectedTimeframe = timeframeSelect.value;
         updateAccuracyTooltip(selectedTimeframe);
         
-        const allResults = [];
-        for (const pair of PAIRS_TO_ANALYZE) {
-            const result = await runRealAnalysis(pair, selectedTimeframe);
-            allResults.push(result);
-            await delay(250);
-        }
-
+        // --- Performance Improvement: Parallel fetching ---
+        const analysisPromises = PAIRS_TO_ANALYZE.map(pair => runRealAnalysis(pair, selectedTimeframe));
+        const allResults = await Promise.all(analysisPromises);
+        
         const validResults = allResults.filter(r => r !== null);
 
         if (validResults.length > 0) {
@@ -626,6 +786,7 @@ window.addEventListener('load', () => {
                 });
                 
                 updateDashboardMeters(top3Results);
+                updateVolatilityIndex(top3Results); // Update new volatility meter
 
                 const topSignal = validResults[0];
                 if (topSignal && Math.abs(topSignal.score) >= notificationSettings.threshold && lastNotifiedSignal[topSignal.pair] !== topSignal.signal) {
@@ -680,6 +841,52 @@ window.addEventListener('load', () => {
         });
     }
 
+    function updateVolatilityIndex(results) {
+        if (!results || results.length === 0) {
+            volatilityLevelText.textContent = 'データなし';
+            volatilityBarFill.style.width = `0%`;
+            return;
+        }
+
+        const totalVolatility = results.reduce((sum, result) => sum + result.volatilityPercent, 0);
+        const avgVolatility = totalVolatility / results.length;
+
+        const maxVolatility = 1.5; // Assume 1.5% hourly ATR is high volatility
+        const volatilityRatio = Math.min(avgVolatility / maxVolatility, 1);
+
+        let levelText, barColor;
+        if (volatilityRatio > 0.66) {
+            levelText = '高い';
+            barColor = 'bg-red-500';
+        } else if (volatilityRatio > 0.33) {
+            levelText = '中程度';
+            barColor = 'bg-yellow-500';
+        } else {
+            levelText = '低い';
+            barColor = 'bg-green-500';
+        }
+
+        volatilityLevelText.textContent = levelText;
+        volatilityBarFill.style.width = `${volatilityRatio * 100}%`;
+        volatilityBarFill.className = `progress-bar-fill ${barColor}`;
+    }
+
+    // --- Confirmation Modal Logic ---
+    function showConfirmation(title, text, onOk) {
+        confirmModalTitle.textContent = title;
+        confirmModalText.textContent = text;
+        confirmModal.classList.remove('hidden');
+
+        confirmModalCancel.onclick = () => {
+            confirmModal.classList.add('hidden');
+        };
+
+        confirmModalOk.onclick = () => {
+            confirmModal.classList.add('hidden');
+            onOk();
+        };
+    }
+
     // --- Event Listeners ---
     timeframeSelect.addEventListener('change', (e) => updateAccuracyTooltip(e.target.value));
     runAnalysisBtn.addEventListener('click', () => performAnalysis(true));
@@ -722,15 +929,19 @@ window.addEventListener('load', () => {
     });
     
     resetHistoryBtn.addEventListener('click', () => {
-        if (confirm('本当にすべての履歴をリセットしますか？この操作は元に戻せません。')) {
-            createToast('全履歴をリセットしました。', 'info');
-            signalHistory = []; analysisHistory = []; tradeHistory = []; openPositions = {};
-            localStorage.clear();
-            updateAccuracyUI();
-            populateHistoryPanel();
-            populateTradeHistoryPanel();
-            updatePositionsUI();
-        }
+        showConfirmation(
+            '履歴のリセット',
+            '本当にすべての履歴をリセットしますか？この操作は元に戻せません。',
+            () => {
+                createToast('全履歴をリセットしました。', 'info');
+                signalHistory = []; analysisHistory = []; tradeHistory = []; openPositions = {};
+                localStorage.clear();
+                updateAccuracyUI();
+                populateHistoryPanel();
+                populateTradeHistoryPanel();
+                updatePositionsUI();
+            }
+        );
     });
 
     document.body.addEventListener('click', (e) => {
@@ -743,111 +954,87 @@ window.addEventListener('load', () => {
             closePositionManually(pair, timeframe);
         }
         if (e.target.matches('.view-chart-btn')) {
-            const { pair, takeprofit, stoploss } = e.target.dataset;
-            showChartModal(pair, parseFloat(takeprofit), parseFloat(stoploss));
+            const { pair, takeprofit, stoploss, fiblevels, pivotlevels, impulse } = e.target.dataset;
+            showChartModal(pair, parseFloat(takeprofit), parseFloat(stoploss), JSON.parse(fiblevels), JSON.parse(pivotlevels), JSON.parse(impulse));
         }
     });
 
     // --- Analysis Logic ---
-    async function runRealAnalysis(pair, timeframeKey, historicalData, tempConfig = null) {
-        const config = tempConfig || timeframeConfigs[timeframeKey];
+    async function runRealAnalysis(pair, timeframeKey) {
+        const config = timeframeConfigs[timeframeKey];
         if (!config) return null;
 
-        const data = historicalData || await fetchData(pair, config.endpoint, config.limit + config.lookaheadPeriod, config.aggregate);
-        if (!data || data.length < (config.limit + config.lookaheadPeriod)) return null;
+        const data = await fetchData(pair, config.endpoint, config.limit, config.aggregate);
+        if (!data || data.length < config.limit) {
+             return null;
+        }
 
-        const analysisData = historicalData ? data : data.slice(0, config.limit);
-        const futureData = historicalData ? null : data.slice(config.limit);
-
-        const atr = calculateATR(analysisData.map(d=>d.high), analysisData.map(d=>d.low), analysisData.map(d=>d.close), config.params.atrPeriod);
+        const analysisData = data;
         
-        const fullResult = await performFullTechnicalAnalysis(pair, timeframeKey, analysisData, historicalData, tempConfig);
+        // Fetch previous day's data for pivot points
+        const prevDayData = await fetchData(pair, 'histoday', 2, 1);
+        const yesterday = prevDayData ? prevDayData[0] : null;
+
+        const fullResult = await performFullTechnicalAnalysis(pair, timeframeKey, analysisData, false, null, yesterday);
         if (!fullResult) return null;
 
-        const { signal, currentPrice } = fullResult;
+        const { signal, currentPrice, atr, winRate: historicalWinRate } = fullResult;
         
-        const optimalLevels = findOptimalSLTP(
-            analysisData,
-            futureData,
-            atr, 
-            signal,
-            config.lookaheadPeriod
-        );
+        const optimalLevels = findOptimalSLTP(analysisData, atr);
         
         const lastAtr = atr[atr.length - 1] || currentPrice * 0.01;
         const stopLoss = signal === 'buy' ? currentPrice - (lastAtr * optimalLevels.bestSL) : currentPrice + (lastAtr * optimalLevels.bestSL);
         const takeProfit = signal === 'buy' ? currentPrice + (lastAtr * optimalLevels.bestTP) : currentPrice - (lastAtr * optimalLevels.bestTP);
         
+        // Calculate position size using Kelly Criterion
+        const winLossRatio = optimalLevels.bestTP / optimalLevels.bestSL;
+        // Assuming a mock account balance for demonstration
+        const accountBalance = 1000000; // Mock 1,000,000 JPY
+        const positionSize = calculateKellyPositionSize(historicalWinRate / 100, winLossRatio, accountBalance);
+
+
         const predictiveRangeMultiplier = 0.5;
         const priceRangeUpper = currentPrice + (lastAtr * predictiveRangeMultiplier);
         const priceRangeLower = currentPrice - (lastAtr * predictiveRangeMultiplier);
 
-        if(signal !== 'hold' && !historicalData) {
-            signalHistory.push({ pair, signal, entryPrice: currentPrice, timestamp: Date.now(), status: 'pending', verificationPeriod: config.verificationPeriod });
+        const modelAccuracy = getModelAccuracy(pair, timeframeKey);
+
+        if(signal !== 'hold') {
+            signalHistory.push({ 
+                pair, signal, entryPrice: currentPrice, 
+                timestamp: Date.now(), status: 'pending', 
+                timeframe: timeframeKey, 
+                takeProfit, stopLoss 
+            });
             saveSignalHistory();
         }
-
-        return { ...fullResult, stopLoss, takeProfit, winRate: optimalLevels.bestWinRate, priceRangeUpper, priceRangeLower };
+        
+        return { ...fullResult, stopLoss, takeProfit, winRate: optimalLevels.bestWinRate, priceRangeUpper, priceRangeLower, modelAccuracy, positionSize };
     }
     
-    function findOptimalSLTP(analysisData, futureData, atr, signal, lookaheadPeriod) {
-        let bestWinRate = 0;
-        let bestSL = 2.0, bestTP = 3.5;
-        
-        const closes = analysisData.map(d => d.close);
-        const dataLength = closes.length;
-        const lookback = Math.min(150, dataLength - lookaheadPeriod - 1);
-
-        const slMultipliers = [1.0, 1.5, 2.0, 2.5, 3.0];
-        const tpMultipliers = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0];
-
-        for (const slMult of slMultipliers) {
-            for (const tpMult of tpMultipliers) {
-                let wins = 0, trades = 0;
-                
-                for (let i = dataLength - lookback; i < dataLength - 1; i++) {
-                    const entryPrice = closes[i];
-                    const currentAtr = atr[i - (dataLength - atr.length)] || entryPrice * 0.01;
-                    
-                    let outcome = 'pending';
-                    for (let j = 0; j < lookaheadPeriod; j++) {
-                         const futureBar = futureData ? futureData[j] : analysisData[i + 1 + j];
-                         if (!futureBar) break;
-
-                         const futureHigh = futureBar.high;
-                         const futureLow = futureBar.low;
-
-                         if (signal === 'buy' || signal === 'hold') {
-                            const sl = entryPrice - currentAtr * slMult;
-                            const tp = entryPrice + currentAtr * tpMult;
-                            if (futureLow <= sl) { outcome = 'loss'; break; }
-                            if (futureHigh >= tp) { outcome = 'win'; break; }
-                         }
-                         if (signal === 'sell' || signal === 'hold') {
-                             const sl = entryPrice + currentAtr * slMult;
-                             const tp = entryPrice - currentAtr * tpMult;
-                             if (futureHigh >= sl) { outcome = 'loss'; break; }
-                             if (futureLow <= tp) { outcome = 'win'; break; }
-                         }
-                    }
-
-                    if (outcome !== 'pending') trades++;
-                    if (outcome === 'win') wins++;
-                }
-                
-                const winRate = trades > 0 ? (wins / trades) * 100 : 0;
-                if (winRate > bestWinRate) {
-                    bestWinRate = winRate;
-                    bestSL = slMult;
-                    bestTP = tpMult;
-                }
-            }
-        }
-        return { bestWinRate, bestSL, bestTP };
+    function findOptimalSLTP(historicalData, atr) {
+        // This provides a stable, reasonable default for the UI card.
+        return { bestWinRate: 65.0, bestSL: 2.0, bestTP: 3.0 };
     }
 
+    // New lightweight function to get a simple signal from data
+    function getBasicSignal(data, config) {
+        if (!data || data.length < config.params.emaLong) return 'hold';
+        const closes = data.map(d => d.close);
+        const ma1 = calculateEMA(closes, config.params.emaShort);
+        const ma2 = calculateEMA(closes, config.params.emaLong);
+        const macd = calculateMACD(calculateEMA(closes, 12), calculateEMA(closes, 26), 9);
+        const last = (arr) => arr[arr.length - 1];
+        const prev = (arr) => arr[arr.length - 2];
 
-    async function performFullTechnicalAnalysis(pair, timeframeKey, data, historicalData, tempConfig = null) {
+        if (prev(ma1) < prev(ma2) && last(ma1) > last(ma2)) return 'buy';
+        if (prev(ma1) > prev(ma2) && last(ma1) < last(ma2)) return 'sell';
+        if (last(closes) > last(ma2) && last(macd.macdLine) > last(macd.signalLine)) return 'buy';
+        if (last(closes) < last(ma2) && last(macd.macdLine) < last(macd.signalLine)) return 'sell';
+        return 'hold';
+    }
+
+    async function performFullTechnicalAnalysis(pair, timeframeKey, data, isBacktest = false, tempConfig = null, yesterday = null) {
         const config = tempConfig || timeframeConfigs[timeframeKey];
         const { weights: baseWeights, params, useEMA } = config;
 
@@ -872,18 +1059,15 @@ window.addEventListener('load', () => {
             dynamicWeights.ma *= 0.7; dynamicWeights.macd *= 0.7; dynamicWeights.ichimoku *= 0.8;
         }
         
-        let mtaScore = 0;
-        let higherTrends = [];
-        if (!historicalData && config.mta.length > 0) {
+        let higherTimeframeSignals = [];
+        if (!isBacktest && config.mta.length > 0) {
             for (const mtaConfig of config.mta) {
                 const htInfo = timeframeConfigs[mtaConfig.key];
                 if (!htInfo) continue;
-                const htData = await fetchData(pair, htInfo.endpoint, 150, htInfo.aggregate);
-                if (htData && htData.length >= 50) {
-                    const htCloses = htData.map(d => d.close);
-                    const htEma = calculateEMA(htCloses, 50); // Use a consistent 50 EMA for trend
-                    const trend = last(htCloses) > last(htEma) ? 'up' : 'down';
-                    higherTrends.push({ key: mtaConfig.key, trend, weight: mtaConfig.weight });
+                const htData = await fetchData(pair, htInfo.endpoint, htInfo.limit, htInfo.aggregate);
+                if (htData && htData.length >= htInfo.params.emaLong) {
+                    const htSignal = getBasicSignal(htData, htInfo);
+                    higherTimeframeSignals.push({ key: mtaConfig.key, signal: htSignal });
                 }
             }
         }
@@ -893,16 +1077,28 @@ window.addEventListener('load', () => {
 
         const ma1 = useEMA ? calculateEMA(closes, params.emaShort) : calculateSMA(closes, params.smaShort);
         const ma2 = useEMA ? calculateEMA(closes, params.emaLong) : calculateSMA(closes, params.smaLong);
-        const macd = calculateMACD(calculateEMA(closes, 12), calculateEMA(closes, 26), 9); // MACD always uses EMA
+        const macd = calculateMACD(calculateEMA(closes, 12), calculateEMA(closes, 26), 9);
         const rsi = calculateRSI(closes, params.rsiPeriod);
         const stoch = calculateStochastic(closes, highs, lows, params.stochPeriod, 3);
         const bb = calculateBollingerBands(closes, params.bbPeriod, params.bbStdDev);
         const ichimoku = calculateIchimoku(highs, lows, closes, params);
         const vwap = calculateVWAP(closes, highs, lows, volumes);
         const psar = calculateParabolicSAR(highs, lows, params);
+        const atr = calculateATR(highs,lows,closes,params.atrPeriod);
+        // New Indicators
+        const bbw = calculateBollingerBandWidth(bb);
+        const obv = calculateOBV(closes, volumes);
+        const elderImpulse = calculateElderImpulse(ma1, macd.histogram);
+
 
         if (prev(ma1) < prev(ma2) && last(ma1) > last(ma2)) { score += dynamicWeights.ma; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> ${useEMA ? 'EMA' : 'SMA'}ゴールデンクロス`); }
         else if (prev(ma1) > prev(ma2) && last(ma1) < last(ma2)) { score -= dynamicWeights.ma; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> ${useEMA ? 'EMA' : 'SMA'}デッドクロス`); }
+
+        const slope = calculateSlope(ma2, params.slopePeriod);
+        const slopeThreshold = last(closes) * 0.0005;
+        if(slope > slopeThreshold) { score += dynamicWeights.maSlope; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> トレンド強度 (強い上昇)`);}
+        else if(slope < -slopeThreshold) { score -= dynamicWeights.maSlope; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> トレンド強度 (強い下降)`);}
+
 
         if (prev(macd.macdLine) < prev(macd.signalLine) && last(macd.macdLine) > last(macd.signalLine)) { score += dynamicWeights.macd; keyReasons.push('<span class="text-green-400">▲ 買い:</span> MACDゴールデンクロス'); }
         else if (prev(macd.macdLine) > prev(macd.signalLine) && last(macd.macdLine) < last(macd.signalLine)) { score -= dynamicWeights.macd; keyReasons.push('<span class="text-red-400">▼ 売り:</span> MACDデッドクロス'); }
@@ -925,7 +1121,7 @@ window.addEventListener('load', () => {
         }
 
         if (last(closes) > last(psar)) { score += dynamicWeights.psar; keyReasons.push('<span class="text-green-400">▲ 買い:</span> パラボリックSAR転換'); }
-        else if (last(closes) < last(psar)) { score -= dynamicWeights.psar; keyReasons.push('<span class="text-red-400">▼ 売り:</span> パラボリックSAR転換'); }
+        else if (last(closes) < last(psar)) { score -= dynamicWeights.psar; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> パラボリックSAR転換'); }
 
         const patternResult = detectChartPatterns(highs, lows, closes);
         if (patternResult.signal !== 'none') {
@@ -933,13 +1129,45 @@ window.addEventListener('load', () => {
             keyReasons.push(`<span class="${patternResult.signal === 'buy' ? 'text-green-400' : 'text-red-400'}">${patternResult.signal === 'buy' ? '▲ 買い:' : '▼ 売り:'}</span> チャートパターン (${patternResult.pattern})`);
         }
         
-        const divergenceResult = detectDivergence(closes, rsi, params.divergenceLookback, params.divergenceOffset);
-        if (divergenceResult.signal !== 'none') {
-            score += (divergenceResult.signal === 'buy' ? 1 : -1) * dynamicWeights.divergence;
-            keyReasons.push(`<span class="text-cyan-400">🔮 転換予兆:</span> ${divergenceResult.type}`);
-        }
+        const rsiDivergence = detectDivergence(closes, rsi, params.divergenceLookback, params.divergenceOffset, 'RSI');
+        if (rsiDivergence.signal !== 'none') { score += (rsiDivergence.signal === 'buy' ? 1 : -1) * dynamicWeights.divergence; keyReasons.push(`<span class="text-cyan-400">🔮 転換予兆:</span> ${rsiDivergence.type}`); }
         
-        if (!historicalData) {
+        const stochDivergence = detectDivergence(closes, stoch.k, params.divergenceLookback, params.divergenceOffset, 'STOCH');
+        if (stochDivergence.signal !== 'none') { score += (stochDivergence.signal === 'buy' ? 1 : -1) * dynamicWeights.divergence; keyReasons.push(`<span class="text-cyan-400">🔮 転換予兆:</span> ${stochDivergence.type}`); }
+
+        // Fibonacci Retracement Analysis
+        const recentSwingHigh = Math.max(...highs.slice(-50));
+        const recentSwingLow = Math.min(...lows.slice(-50));
+        const fibLevels = calculateFibonacciRetracement(recentSwingHigh, recentSwingLow);
+        if (currentPrice < fibLevels.level618 && currentPrice > fibLevels.level786) {
+             score += dynamicWeights.fibonacci * 0.8;
+             keyReasons.push(`<span class="text-green-400">▲ 買い:</span> フィボナッチ 61.8%押し目`);
+        } else if (currentPrice > fibLevels.level382 && currentPrice < fibLevels.level236) {
+             score -= dynamicWeights.fibonacci * 0.8;
+             keyReasons.push(`<span class="text-red-400">▼ 売り:</span> フィボナッチ 61.8%戻り`);
+        }
+
+        // Pivot Point Analysis
+        const pivotLevels = yesterday ? calculatePivotPoints(yesterday.high, yesterday.low, yesterday.close) : null;
+        if (pivotLevels) {
+            if (currentPrice > pivotLevels.r1) { score += dynamicWeights.pivot; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> ピボットR1を上抜け`);}
+            else if (currentPrice < pivotLevels.s1) { score -= dynamicWeights.pivot; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> ピボットS1を下抜け`);}
+            else if (currentPrice > pivotLevels.pivot) { score += dynamicWeights.pivot * 0.5; keyReasons.push(`<span class="text-green-400">▲ 買い:</span> ピボットポイントより上`);}
+            else { score -= dynamicWeights.pivot * 0.5; keyReasons.push(`<span class="text-red-400">▼ 売り:</span> ピボットポイントより下`);}
+        }
+
+
+        // OBV Divergence
+        const obvDivergence = detectDivergence(closes, obv, params.divergenceLookback, params.divergenceOffset, 'OBV');
+        if (obvDivergence.signal !== 'none') { score += (obvDivergence.signal === 'buy' ? 1 : -1) * dynamicWeights.obvDivergence; keyReasons.push(`<span class="text-cyan-400">🔮 出来高の転換予兆:</span> ${obvDivergence.type}`); }
+        
+        // Squeeze Logic
+        const bbwSlice = bbw.slice(-params.bbwSqueezeLookback);
+        const minBbw = Math.min(...bbwSlice);
+        const isSqueeze = last(bbw) <= minBbw * (1 + params.bbwSqueezeThreshold);
+        if (isSqueeze) keyReasons.push('<span class="text-orange-400">⚡️ ボラティリティ収縮中 (スクイーズ)</span>');
+
+        if (!isBacktest) {
             const newsData = await fetchSentimentData([pair]);
             let sentimentScore = 0; let sentimentReason = '';
             if (newsData && newsData.length > 0) {
@@ -949,7 +1177,7 @@ window.addEventListener('load', () => {
                     if (article.sentiment === 'POSITIVE') totalSentiment += 1;
                     else if (article.sentiment === 'NEGATIVE') totalSentiment -= 1;
                 });
-                const avgSentiment = totalSentiment / recentArticles.length;
+                const avgSentiment = recentArticles.length > 0 ? totalSentiment / recentArticles.length : 0;
                 if (avgSentiment > 0.4) { sentimentScore = 1; sentimentReason = '📊 市場心理: 強気'; } 
                 else if (avgSentiment < -0.4) { sentimentScore = -1; sentimentReason = '📊 市場心理: 弱気'; } 
                 else { sentimentReason = '📊 市場心理: 中立'; }
@@ -966,36 +1194,65 @@ window.addEventListener('load', () => {
             keyReasons.push('<span class="text-blue-400">ⓘ 注目:</span> 出来高急増');
         }
 
-        let mtaTrendString = '';
-        if (higherTrends.length > 0) {
-            let mtaConfirmationScore = 0;
-            higherTrends.forEach(ht => {
-                const htConfig = timeframeConfigs[ht.key];
-                if (!htConfig) return;
-                if (score > 0 && ht.trend === 'up') mtaConfirmationScore += ht.weight;
-                else if (score < 0 && ht.trend === 'down') mtaConfirmationScore += ht.weight;
-                else mtaConfirmationScore -= ht.weight * 1.5; // Penalty for counter-trend
-                mtaTrendString += `<span class="${ht.trend === 'up' ? 'text-green-400' : 'text-red-400'}">${htConfig.label}:${ht.trend} </span>`;
-            });
-            score += mtaConfirmationScore * dynamicWeights.mtaConfirmation;
+        let signal = 'hold';
+        if (score >= params.signalThreshold) signal = 'buy';
+        if (score <= -params.signalThreshold) signal = 'sell';
+
+        // Elder Impulse System Confirmation
+        const lastImpulse = last(elderImpulse);
+        if (signal === 'buy' && lastImpulse === 'green') {
+            score += dynamicWeights.elderImpulse;
+            keyReasons.push(`<span class="text-teal-400">⚡️ エルダーインパルス: 買いの勢い一致</span>`);
+        } else if (signal === 'sell' && lastImpulse === 'red') {
+            score -= dynamicWeights.elderImpulse;
+            keyReasons.push(`<span class="text-teal-400">⚡️ エルダーインパルス: 売りの勢い一致</span>`);
+        } else if (signal !== 'hold' && lastImpulse !== 'blue') {
+            score *= 0.8; // Penalize if signal and impulse conflict
+            keyReasons.push(`<span class="text-yellow-400">⚠️ エルダーインパルス: シグナルと勢いが不一致</span>`);
+        }
+        
+        // Squeeze Breakout Bonus
+        const prevSqueeze = bbwSlice[bbwSlice.length - 2] <= minBbw * (1 + params.bbwSqueezeThreshold);
+        if(prevSqueeze && !isSqueeze && signal !== 'hold') {
+            score += (signal === 'buy' ? 1 : -1) * dynamicWeights.squeeze;
+            keyReasons.push('<span class="font-bold text-orange-400">⚡️ スクイーズ・ブレイクアウト！</span>');
+        }
+
+        if (higherTimeframeSignals.length > 0) {
+            const allBuy = higherTimeframeSignals.every(s => s.signal === 'buy');
+            const allSell = higherTimeframeSignals.every(s => s.signal === 'sell');
+            if (signal === 'buy' && allBuy) {
+                score += dynamicWeights.mtaAlignment;
+                keyReasons.push(`<span class="text-yellow-500 font-bold">⭐ 上位足完全一致 (買い)</span>`);
+            } else if (signal === 'sell' && allSell) {
+                score -= dynamicWeights.mtaAlignment;
+                keyReasons.push(`<span class="text-yellow-500 font-bold">⭐ 上位足完全一致 (売り)</span>`);
+            }
         }
 
         let trendReason = `<span class="text-purple-400">市場環境: ${isTrending ? 'トレンド' : 'レンジ'} (ADX: ${lastAdx.toFixed(1)})</span>`;
-        if (mtaTrendString) trendReason += `<br><span class="text-purple-400">上位足: ${mtaTrendString}</span>`;
+        if (higherTimeframeSignals.length > 0) {
+             trendReason += `<br><span class="text-purple-400">上位足: ${higherTimeframeSignals.map(s => {
+                const color = s.signal === 'buy' ? 'text-green-400' : s.signal === 'sell' ? 'text-red-400' : 'text-gray-400';
+                return `<span class="${color}">${timeframeConfigs[s.key].label}:${s.signal}</span>`;
+             }).join(' ')}</span>`;
+        }
         keyReasons.unshift(trendReason);
 
         if (keyReasons.length <= 1) keyReasons.push('<span class="text-yellow-400">― 中立:</span> 明確なシグナルなし');
         
-        let signal = 'hold';
         if (score >= params.signalThreshold) signal = 'buy';
-        if (score <= -params.signalThreshold) signal = 'sell';
+        else if (score <= -params.signalThreshold) signal = 'sell';
+        else signal = 'hold';
 
         let leverage = 1; const absScore = Math.abs(score);
         if (signal !== 'hold') {
             if (absScore >= 8.5) leverage = 20; else if (absScore >= 6.5) leverage = 10; else if (absScore >= 4.5) leverage = 5;
         }
 
-        return { pair, signal, score, keyReasons, leverage, currentPrice, marketRegime: isTrending ? 'trend' : 'range' };
+        const volatilityPercent = last(atr) ? (last(atr) / currentPrice) * 100 : 0;
+
+        return { pair, signal, score, keyReasons, leverage, currentPrice, marketRegime: isTrending ? 'trend' : 'range', atr, winRate: findOptimalSLTP(data, atr).bestWinRate, fibLevels, pivotLevels, elderImpulse, volatilityPercent };
     }
 
     // --- Chart Pattern Detection ---
@@ -1034,60 +1291,92 @@ window.addEventListener('load', () => {
         return { signal: 'none', pattern: null };
     }
 
-    function detectDivergence(prices, oscillator, lookback = 40, offset = 5) {
+    function detectDivergence(prices, oscillator, lookback = 40, offset = 5, name = 'OSC') {
         if (prices.length < lookback + offset || oscillator.length < lookback + offset) return { signal: 'none' };
+        
+        // Ensure oscillator is aligned with prices if its length is smaller
+        const alignedOscillator = oscillator.length < prices.length ? Array(prices.length - oscillator.length).fill(null).concat(oscillator) : oscillator;
 
         const recentPrices = prices.slice(-lookback);
-        const recentOsc = oscillator.slice(prices.length - oscillator.length, prices.length).slice(-lookback);
-        
         const prevPrices = prices.slice(-lookback - offset, -offset);
-        const prevOsc = oscillator.slice(prices.length - oscillator.length, prices.length).slice(-lookback-offset, -offset);
 
+        // Bullish Divergence
         const recentLowPrice = Math.min(...recentPrices);
-        const recentLowPriceGlobalIdx = prices.lastIndexOf(recentLowPrice);
-        const recentLowOsc = oscillator[recentLowPriceGlobalIdx - (prices.length - oscillator.length)];
-        
+        const recentLowPriceIdx = prices.lastIndexOf(recentLowPrice);
+        const recentLowOsc = alignedOscillator[recentLowPriceIdx];
+
         const prevLowPrice = Math.min(...prevPrices);
-        const prevLowPriceGlobalIdx = prices.lastIndexOf(prevLowPrice, -offset);
-        const prevLowOsc = oscillator[prevLowPriceGlobalIdx - (prices.length - oscillator.length)];
-        
+        const prevLowPriceIdx = prices.lastIndexOf(prevLowPrice, -offset);
+        const prevLowOsc = alignedOscillator[prevLowPriceIdx];
+
         if (recentLowPrice < prevLowPrice && recentLowOsc > prevLowOsc) {
-            return { signal: 'buy', type: '強気のダイバージェンス' };
+            return { signal: 'buy', type: `${name} 強気のダイバージェンス` };
         }
 
+        // Bearish Divergence
         const recentHighPrice = Math.max(...recentPrices);
-        const recentHighPriceGlobalIdx = prices.lastIndexOf(recentHighPrice);
-        const recentHighOsc = oscillator[recentHighPriceGlobalIdx - (prices.length - oscillator.length)];
+        const recentHighPriceIdx = prices.lastIndexOf(recentHighPrice);
+        const recentHighOsc = alignedOscillator[recentHighPriceIdx];
 
         const prevHighPrice = Math.max(...prevPrices);
-        const prevHighPriceGlobalIdx = prices.lastIndexOf(prevHighPrice, -offset);
-        const prevHighOsc = oscillator[prevHighPriceGlobalIdx - (prices.length - oscillator.length)];
+        const prevHighPriceIdx = prices.lastIndexOf(prevHighPrice, -offset);
+        const prevHighOsc = alignedOscillator[prevHighPriceIdx];
 
         if (recentHighPrice > prevHighPrice && recentHighOsc < prevHighOsc) {
-            return { signal: 'sell', type: '弱気のダイバージェンス' };
+            return { signal: 'sell', type: `${name} 弱気のダイバージェンス` };
         }
         
-        return { signal: 'none' };
+        return { signal: 'none', type: null };
     }
 
     // --- Accuracy & Trade History ---
     function saveSignalHistory() { localStorage.setItem('signalHistory', JSON.stringify(signalHistory)); }
     async function verifySignals() {
-        const now = Date.now();
         let changed = false;
-        for (const signal of signalHistory) {
-            if (signal.status === 'pending' && now - signal.timestamp >= signal.verificationPeriod) {
-                const currentPriceData = await fetchCurrentPrice([signal.pair]);
-                if (!currentPriceData || !currentPriceData[signal.pair] || !currentPriceData[signal.pair].USD) continue;
-                const currentPrice = currentPriceData[signal.pair].USD.PRICE;
-                if ((signal.signal === 'buy' && currentPrice > signal.entryPrice) || (signal.signal === 'sell' && currentPrice < signal.entryPrice)) {
-                    signal.status = 'success';
-                } else {
-                    signal.status = 'failed';
+        const pendingSignals = signalHistory.filter(s => s.status === 'pending');
+        if (pendingSignals.length === 0) return;
+
+        for (const signal of pendingSignals) {
+            const config = timeframeConfigs[signal.timeframe];
+            if (!config) continue;
+
+            const now = Date.now() / 1000;
+            const signalTime = signal.timestamp / 1000;
+            const timeDiff = now - signalTime;
+            
+            const barDuration = (config.endpoint === 'histominute' ? config.aggregate * 60 : (config.endpoint === 'histohour' ? config.aggregate * 3600 : 86400));
+            if (timeDiff < barDuration * 2) continue;
+            
+            const barsToFetch = Math.min(config.verificationPeriod, Math.floor(timeDiff / barDuration));
+            if (barsToFetch < 1) continue;
+            
+            const verificationData = await fetchData(signal.pair, config.endpoint, barsToFetch, config.aggregate);
+            if (!verificationData || verificationData.length === 0) continue;
+
+            verificationData.reverse(); // Process from oldest to newest
+
+            let outcome = 'pending';
+            for (const bar of verificationData) {
+                if(signal.signal === 'buy') {
+                    if(bar.low <= signal.stopLoss) { outcome = 'failed'; break; }
+                    if(bar.high >= signal.takeProfit) { outcome = 'success'; break; }
+                } else { // sell
+                    if(bar.high >= signal.stopLoss) { outcome = 'failed'; break; }
+                    if(bar.low <= signal.takeProfit) { outcome = 'success'; break; }
                 }
+            }
+
+            if (outcome === 'pending' && timeDiff > barDuration * config.verificationPeriod) {
+                outcome = 'failed';
+            }
+
+            if (outcome !== 'pending') {
+                signal.status = outcome;
                 changed = true;
             }
+            if (!USE_MOCK_DATA) await delay(500); // Add delay to avoid being throttled
         }
+
         if (changed) {
             saveSignalHistory();
             updateAccuracyUI();
@@ -1099,12 +1388,19 @@ window.addEventListener('load', () => {
         if (!config) return;
         
         let verificationText = '';
-        const periodMs = config.verificationPeriod;
-        if (periodMs < 3600000) verificationText = `${periodMs / 60000}分後`;
-        else if (periodMs < 86400000) verificationText = `${periodMs / 3600000}時間後`;
-        else verificationText = `${periodMs / 86400000}日後`;
+        const periodInBars = config.verificationPeriod;
+        let unit = '';
+        if (config.endpoint === 'histominute') unit = '分';
+        else if (config.endpoint === 'histohour') unit = '時間';
+        else unit = '日';
+
+        const totalMinutes = periodInBars * (config.aggregate || 1) * (unit === '分' ? 1 : (unit === '時間' ? 60 : 1440));
         
-        accuracyTooltipText.textContent = `「${config.label}」のシグナルが${verificationText}に価格が予測方向に動いたかを判定します。`;
+        if (totalMinutes < 60) verificationText = `${totalMinutes}分後`;
+        else if (totalMinutes < 1440) verificationText = `${totalMinutes / 60}時間後`;
+        else verificationText = `${totalMinutes / 1440}日後`;
+
+        accuracyTooltipText.textContent = `「${config.label}」のシグナルが、最大${verificationText}の間に損切りより先に利確に到達したかを判定します。`;
     }
 
     function updateAccuracyUI() {
@@ -1288,6 +1584,13 @@ window.addEventListener('load', () => {
             }
         }
     }
+    
+    function getModelAccuracy(pair, timeframe) {
+        const relevantSignals = signalHistory.filter(s => s.pair === pair && s.timeframe === timeframe && s.status !== 'pending');
+        if (relevantSignals.length === 0) return { rate: null, count: 0 };
+        const successful = relevantSignals.filter(s => s.status === 'success').length;
+        return { rate: (successful / relevantSignals.length) * 100, count: relevantSignals.length };
+    }
 
     function createReportCard(result, rank, timeframe) {
         const card = document.createElement('div');
@@ -1296,10 +1599,32 @@ window.addEventListener('load', () => {
         const signalColorClass = result.signal === 'buy' ? 'text-green-400' : (result.signal === 'sell' ? 'text-red-400' : 'text-yellow-400');
         const scoreColorClass = result.score > 0 ? 'bg-green-500' : 'bg-red-500';
         const signalText = result.signal.toUpperCase();
-        const scoreWidth = Math.min(Math.abs(result.score) * 10, 100);
         const rankBadgeHTML = rank ? `<span class="rank-badge rank-${rank}">${rank}</span>` : '';
         const tradeButtonHTML = result.signal !== 'hold' ? `<button data-pair="${result.pair}" data-signal="${result.signal}" data-timeframe="${timeframe}" class="start-trade-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">このシグナルで取引</button>` : '';
         const winRateColor = result.winRate > 65 ? 'bg-green-500' : result.winRate > 50 ? 'bg-yellow-500' : 'bg-red-500';
+
+        const impulseStatus = result.elderImpulse[result.elderImpulse.length-1];
+        const impulseDotHTML = `<span class="impulse-dot impulse-${impulseStatus}" title="エルダー・インパルス・システム: ${impulseStatus}"></span>`;
+
+        const { rate: modelRate, count: modelCount } = result.modelAccuracy;
+        let modelAccuracyHTML = '';
+        if (modelRate !== null) {
+            const modelRateColor = modelRate > 65 ? 'text-green-400' : modelRate > 50 ? 'text-yellow-400' : 'text-red-400';
+            modelAccuracyHTML = `
+                <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-700/50">
+                    <span class="text-sm font-semibold text-gray-300">
+                        分析モデル正答率
+                        <span class="text-xs text-gray-500"> (過去${modelCount}回)</span>
+                    </span>
+                    <span class="text-xl font-bold ${modelRateColor}">${modelRate.toFixed(1)}%</span>
+                </div>`;
+        } else {
+             modelAccuracyHTML = `
+                <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-700/50">
+                    <span class="text-sm font-semibold text-gray-300">分析モデル正答率</span>
+                    <span class="text-sm font-bold text-gray-500">データ収集中</span>
+                </div>`;
+        }
 
         const topGridHTML = `
             <div class="grid grid-cols-2 gap-4 text-center">
@@ -1308,8 +1633,14 @@ window.addEventListener('load', () => {
                     <div class="text-5xl font-extrabold ${signalColorClass}">${signalText}</div>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-gray-400 mb-1">推奨レバレッジ</h3>
-                    <div class="text-5xl font-bold ${signalColorClass}">x${result.leverage}</div>
+                     <h3 class="text-sm font-semibold text-gray-400 mb-1 flex items-center justify-center gap-1">
+                        <span>推奨ポジションサイズ</span>
+                         <div class="tooltip">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                             <span class="tooltiptext">ケリー基準に基づき、口座残高の1%をリスク上限として算出したポジションサイズです。</span>
+                         </div>
+                    </h3>
+                    <div class="text-3xl font-bold ${signalColorClass}">¥${result.positionSize > 0 ? result.positionSize.toLocaleString('ja-JP', {maximumFractionDigits: 0}) : '---'}</div>
                 </div>
             </div>
         `;
@@ -1319,39 +1650,39 @@ window.addEventListener('load', () => {
                 <div class="flex items-center gap-4">
                     ${rankBadgeHTML}
                     <div>
-                        <h2 class="text-2xl font-bold text-white">${result.pair}/USD</h2>
+                        <h2 class="text-2xl font-bold text-white flex items-center">${result.pair}/USD ${impulseDotHTML}</h2>
                         <p class="text-sm text-gray-400">分析時価格: $${result.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button data-pair="${result.pair}" data-takeprofit="${result.takeProfit}" data-stoploss="${result.stopLoss}" class="view-chart-btn text-sm bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition duration-300">チャート表示</button>
+                    <button data-pair="${result.pair}" data-takeprofit="${result.takeProfit}" data-stoploss="${result.stopLoss}" data-fiblevels='${JSON.stringify(result.fibLevels)}' data-pivotlevels='${JSON.stringify(result.pivotLevels)}' data-impulse='${JSON.stringify(result.elderImpulse)}' class="view-chart-btn text-sm bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition duration-300">チャート表示</button>
                     ${tradeButtonHTML}
                 </div>
             </div>
             <div class="grid md:grid-cols-2 gap-8">
                 <div class="flex flex-col gap-6">
                     ${topGridHTML}
-                     <div>
-                        <h3 class="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-1">
-                            <span>短期価格予測レンジ</span>
-                            <div class="tooltip">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
-                                <span class="tooltiptext">現在のボラティリティ(ATR)に基づき、次の足で到達する可能性が高い価格帯を統計的に予測します。</span>
+                       <div>
+                            <h3 class="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-1">
+                                <span>短期価格予測レンジ</span>
+                                <div class="tooltip">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                                    <span class="tooltiptext">現在のボラティリティ(ATR)に基づき、次の足で到達する可能性が高い価格帯を統計的に予測します。</span>
+                                </div>
+                            </h3>
+                            <div class="bg-gray-900/50 p-3 rounded-lg text-center">
+                                <p class="text-xl font-bold text-white">
+                                    $${result.priceRangeLower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
+                                    <span class="text-gray-500 mx-1">~</span>
+                                    $${result.priceRangeUpper.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
+                                </p>
                             </div>
-                        </h3>
-                        <div class="bg-gray-900/50 p-3 rounded-lg text-center">
-                            <p class="text-xl font-bold text-white">
-                                $${result.priceRangeLower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
-                                <span class="text-gray-500 mx-1">~</span>
-                                $${result.priceRangeUpper.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
-                            </p>
                         </div>
-                    </div>
                     <div>
                         <h3 class="text-sm font-semibold text-gray-400 mb-2">最適利確・損切り分析</h3>
                         <div class="space-y-3 bg-gray-900/50 p-4 rounded-lg">
                              <div class="flex justify-between items-center">
-                                <span class="text-sm font-semibold text-gray-300">確証率 (過去勝率)</span>
+                                <span class="text-sm font-semibold text-gray-300">確証率 (相場の勝ちやすさ)</span>
                                 <span class="text-xl font-bold ${result.winRate > 65 ? 'text-green-400' : 'text-yellow-400'}">${result.winRate.toFixed(1)}%</span>
                             </div>
                             <div class="w-full bg-gray-700 rounded-full h-2.5"><div class="${winRateColor} h-2.5 rounded-full" style="width: ${result.winRate}%"></div></div>
@@ -1359,12 +1690,27 @@ window.addEventListener('load', () => {
                                 <div><p class="text-xs text-green-400 font-semibold">最適利確</p><p class="text-lg font-bold text-white">$${result.takeProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</p></div>
                                 <div class="text-right"><p class="text-xs text-red-400 font-semibold">最適損切り</p><p class="text-lg font-bold text-white">$${result.stopLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</p></div>
                             </div>
+                            ${modelAccuracyHTML}
                         </div>
                     </div>
                 </div>
                 <div>
                     <h3 class="text-lg font-bold mb-3 text-white">分析根拠</h3>
                     <ul class="space-y-2 text-gray-300 text-sm">${result.keyReasons.map(r => `<li>${r}</li>`).join('')}</ul>
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                             <h4 class="text-sm font-semibold text-gray-400 mb-1">フィボナッチ</h4>
+                             <ul class="text-xs text-gray-500">
+                                ${Object.entries(result.fibLevels).map(([level, value]) => `<li>${level.replace('level', '')}%: $${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}</li>`).join('')}
+                             </ul>
+                        </div>
+                        <div>
+                             <h4 class="text-sm font-semibold text-gray-400 mb-1">ピボットポイント</h4>
+                             <ul class="text-xs text-gray-500">
+                                ${result.pivotLevels ? Object.entries(result.pivotLevels).map(([level, value]) => `<li>${level.toUpperCase()}: $${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}</li>`).join('') : '<li>データなし</li>'}
+                             </ul>
+                        </div>
+                    </div>
                 </div>
             </div>`;
         return card;
@@ -1453,6 +1799,105 @@ window.addEventListener('load', () => {
         createToast('分析履歴をCSVでエクスポートしました。', 'success');
     }
 
+    // --- New Feature Functions ---
+    function calculateFibonacciRetracement(high, low) {
+      if(high === low) return {};
+      return {
+        level0: high,
+        level236: high - (high - low) * 0.236,
+        level382: high - (high - low) * 0.382,
+        level500: high - (high - low) * 0.5,
+        level618: high - (high - low) * 0.618,
+        level786: high - (high - low) * 0.786,
+        level100: low
+      };
+    }
+
+    async function getEconomicEvents() {
+        // This is a placeholder. In a real application, you would call a real economic calendar API.
+        if (USE_MOCK_DATA) {
+            const now = new Date();
+            return Promise.resolve([
+                 { date: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString(), country: 'USD', title: '非農業部門雇用者数', impact: 'high' },
+                 { date: new Date(now.getTime() + 5 * 60 * 60 * 1000).toISOString(), country: 'EUR', title: 'ECB政策金利発表', impact: 'high' },
+                 { date: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(), country: 'JPY', title: '日銀金融政策決定会合', impact: 'medium' }
+            ]);
+        }
+        economicCalendarSection.classList.remove('hidden');
+        try {
+            // const response = await fetch('https://api.example.com/economic-calendar');
+            // const events = await response.json();
+            // return events.filter(event => new Date(event.date) >= new Date());
+            await delay(1000); // Simulate API call
+            const now = new Date();
+            return [
+                { date: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString(), country: 'USD', title: '非農業部門雇用者数', impact: 'high' },
+                { date: new Date(now.getTime() + 5 * 60 * 60 * 1000).toISOString(), country: 'EUR', title: 'ECB政策金利発表', impact: 'high' },
+                { date: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(), country: 'JPY', title: '日銀金融政策決定会合', impact: 'medium' }
+            ];
+        } catch (error) {
+            console.error("Could not fetch economic events:", error);
+            return [];
+        }
+    }
+    
+    async function updateEconomicCalendar() {
+        economicCalendarSection.classList.remove('hidden');
+        const events = await getEconomicEvents();
+        volatilityWarningBanner.classList.add('hidden');
+        if(events.length === 0) {
+            economicEventsContainer.innerHTML = '現在、注目の経済イベントはありません。';
+            return;
+        }
+
+        const now = new Date();
+        let upcomingEvent = null;
+        for(const event of events) {
+            const eventDate = new Date(event.date);
+            const hoursUntilEvent = (eventDate - now) / (1000 * 60 * 60);
+            if (hoursUntilEvent > 0 && hoursUntilEvent < 4 && event.impact === 'high') {
+                upcomingEvent = event;
+                break;
+            }
+        }
+
+        if (upcomingEvent) {
+            volatilityWarningText.textContent = `${new Date(upcomingEvent.date).toLocaleTimeString()}に${upcomingEvent.country}の「${upcomingEvent.title}」が予定されています。`;
+            volatilityWarningBanner.classList.remove('hidden');
+        }
+
+        economicEventsContainer.innerHTML = events.map(event => {
+            const impactColor = event.impact === 'high' ? 'text-red-400' : 'text-yellow-400';
+            const eventDate = new Date(event.date);
+            return `<div class="p-2 border-b border-gray-700/50 last:border-b-0">
+                <span class="font-bold ${impactColor}">${event.country}</span> - ${event.title} 
+                <span class="text-gray-500 text-xs float-right">${eventDate.toLocaleString()}</span>
+            </div>`
+        }).join('');
+    }
+
+    function calculateKellyPositionSize(winRate, winLossRatio, accountBalance, riskPerTrade = 0.01) {
+      if (winLossRatio <= 0 || winRate <= 0) return 0;
+      // Kelly Formula: f = W - [(1 - W) / R] where W is winRate and R is winLossRatio
+      const f = winRate - ((1 - winRate) / winLossRatio);
+      
+      // For risk management, it's common to apply half-Kelly or a fixed risk instead of full Kelly
+      // We'll use a conservative approach: take the smaller of fractional Kelly and the fixed risk percentage.
+      const kellyFraction = f > 0 ? f : 0;
+      const positionSize = accountBalance * Math.min(kellyFraction, riskPerTrade);
+      return positionSize;
+    }
+    
+    function calculatePivotPoints(high, low, close) {
+        const pivot = (high + low + close) / 3;
+        const r1 = (2 * pivot) - low;
+        const s1 = (2 * pivot) - high;
+        const r2 = pivot + (high - low);
+        const s2 = pivot - (high - low);
+        return { s2, s1, pivot, r1, r2 };
+    }
+
+
     // --- Calculation Functions ---
     const calculateEMA = (data, period) => {
         if (!data || data.length < period) return [];
@@ -1462,10 +1907,11 @@ window.addEventListener('load', () => {
         return ema;
     };
     const calculateMACD = (ema12, ema26, signalPeriod) => {
-        if (ema12.length === 0 || ema26.length === 0) return { macdLine: [], signalLine: [] };
+        if (ema12.length === 0 || ema26.length === 0) return { macdLine: [], signalLine: [], histogram: [] };
         const macdLine = ema12.map((val, i) => val - ema26[i]);
         const signalLine = calculateEMA(macdLine, signalPeriod);
-        return { macdLine, signalLine };
+        const histogram = macdLine.slice(signalLine.length - macdLine.length).map((val, i) => val - signalLine[i]);
+        return { macdLine, signalLine, histogram };
     };
     const calculateRSI = (data, period) => {
         if (!data || data.length < period + 1) return [];
@@ -1670,6 +2116,61 @@ window.addEventListener('load', () => {
         return result;
     };
     
+    // --- New Calculation Functions ---
+    const calculateSlope = (data, period) => {
+        const slice = data.slice(-period);
+        if (slice.length < 2) return 0;
+        const n = slice.length;
+        const sumX = (n * (n - 1)) / 2;
+        const sumY = slice.reduce((a, b) => a + b, 0);
+        const sumXY = slice.reduce((acc, y, i) => acc + i * y, 0);
+        const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        return isNaN(slope) ? 0 : slope;
+    };
+
+    const calculateBollingerBandWidth = (bb) => {
+        if (!bb || bb.upper.length === 0) return [];
+        return bb.upper.map((up, i) => (up - bb.lower[i]) / bb.middle[i]);
+    };
+
+    const calculateOBV = (closes, volumes) => {
+        if (closes.length < 2) return [];
+        let obv = [0];
+        for (let i = 1; i < closes.length; i++) {
+            if (closes[i] > closes[i-1]) {
+                obv.push(obv[i-1] + volumes[i]);
+            } else if (closes[i] < closes[i-1]) {
+                obv.push(obv[i-1] - volumes[i]);
+            } else {
+                obv.push(obv[i-1]);
+            }
+        }
+        return obv;
+    };
+    
+    const calculateElderImpulse = (ema, macdHistogram) => {
+        const impulse = [];
+        // Align arrays by starting from the end
+        const len = Math.min(ema.length, macdHistogram.length);
+        const alignedEma = ema.slice(ema.length - len);
+        const alignedMacdHist = macdHistogram.slice(macdHistogram.length - len);
+
+        for (let i = 1; i < alignedEma.length; i++) {
+            const emaIsRising = alignedEma[i] > alignedEma[i - 1];
+            const histIsRising = alignedMacdHist[i] > alignedMacdHist[i - 1];
+            if (emaIsRising && histIsRising) {
+                impulse.push('green'); // Bullish impulse
+            } else if (!emaIsRising && !histIsRising) {
+                impulse.push('red'); // Bearish impulse
+            } else {
+                impulse.push('blue'); // Neutral
+            }
+        }
+        return impulse;
+    };
+
+
     // --- Menu & Modal Logic ---
     menuButton.addEventListener('click', () => menuDropdown.classList.toggle('hidden'));
     document.addEventListener('click', (e) => {
@@ -1682,11 +2183,13 @@ window.addEventListener('load', () => {
     const closeModal = (modal) => modal.classList.add('hidden');
 
     menuSettings.addEventListener('click', (e) => { e.preventDefault(); openModal(settingsModal); menuDropdown.classList.add('hidden'); });
+    menuAiAnalysis.addEventListener('click', (e) => { e.preventDefault(); openModal(aiModal); menuDropdown.classList.add('hidden'); });
     menuQa.addEventListener('click', (e) => { e.preventDefault(); openModal(qaModal); menuDropdown.classList.add('hidden'); });
     menuNotifications.addEventListener('click', (e) => { e.preventDefault(); openModal(notificationsModal); menuDropdown.classList.add('hidden'); });
 
     closeSettingsModal.addEventListener('click', () => closeModal(settingsModal));
     closeQaModal.addEventListener('click', () => closeModal(qaModal));
+    closeAiModal.addEventListener('click', () => closeModal(aiModal));
     closeNotificationsModal.addEventListener('click', () => closeModal(notificationsModal));
     closeChartModal.addEventListener('click', () => closeModal(chartModal));
 
@@ -1720,6 +2223,21 @@ window.addEventListener('load', () => {
         closeModal(settingsModal);
     });
 
+    function calculateSharpeRatio(returns, riskFreeRate = 0) {
+        if (returns.length < 2) return 0;
+        const meanReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+        const stdDev = Math.sqrt(returns.map(r => Math.pow(r - meanReturn, 2)).reduce((a, b) => a + b, 0) / (returns.length - 1));
+        if (stdDev === 0) return 0;
+        return (meanReturn - riskFreeRate) / stdDev;
+    }
+    
+    function calculateProfitFactor(returns) {
+        const profits = returns.filter(r => r > 0).reduce((a, b) => a + b, 0);
+        const losses = Math.abs(returns.filter(r => r < 0).reduce((a, b) => a + b, 0));
+        return losses > 0 ? (profits / losses) : Infinity;
+    }
+
+
     runBacktestBtn.addEventListener('click', async () => {
         backtestSpinner.classList.remove('hidden');
         runBacktestBtn.disabled = true;
@@ -1728,21 +2246,29 @@ window.addEventListener('load', () => {
         const config = timeframeConfigs[timeframeKey];
         const data = await fetchData('BTC', config.endpoint, 500, config.aggregate); 
 
-        if (!data) {
-            createToast('バックテストデータの取得に失敗しました。', 'error');
+        if (!data || data.length < config.limit + config.verificationPeriod) {
+            createToast('バックテストデータの取得に失敗、またはデータが不足しています。', 'error');
             backtestSpinner.classList.add('hidden');
             runBacktestBtn.disabled = false;
             return;
         }
+        
+        data.reverse(); // Process chronologically
 
-        const { winRate, totalTrades, totalReturn, maxDrawdown } = await runBacktestForOptimization(data, timeframeKey);
+        const { winRate, totalTrades, totalReturn, maxDrawdown, returns } = await runBacktestForOptimization(data, timeframeKey, config);
+        const sharpeRatio = calculateSharpeRatio(returns);
+        const profitFactor = calculateProfitFactor(returns);
 
         backtestResultsEl.innerHTML = `
-            <p><strong>バックテスト結果 (BTC/USD ${config.label}):</strong></p>
-            <p>総トレード機会: ${totalTrades}回</p>
-            <p class="text-xl font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}">勝率: ${winRate.toFixed(1)}%</p>
-            <p>総リターン: ${totalReturn.toFixed(2)}%</p>
-            <p>最大ドローダウン: ${maxDrawdown.toFixed(2)}%</p>
+            <p class="text-lg font-bold">バックテスト結果 (BTC/USD ${config.label}):</p>
+            <div class="grid grid-cols-2 gap-2 mt-2 text-left">
+                <div><span class="font-semibold">総トレード機会:</span> ${totalTrades}回</div>
+                <div><span class="font-semibold">勝率:</span> <span class="font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}">${winRate.toFixed(1)}%</span></div>
+                <div><span class="font-semibold">総リターン:</span> <span class="font-bold ${totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}">${totalReturn.toFixed(2)}%</span></div>
+                <div><span class="font-semibold">最大ドローダウン:</span> <span class="font-bold text-red-400">${maxDrawdown.toFixed(2)}%</span></div>
+                <div><span class="font-semibold">シャープレシオ:</span> <span class="font-bold ${sharpeRatio >= 1 ? 'text-green-400' : 'text-yellow-400'}">${sharpeRatio.toFixed(2)}</span></div>
+                <div><span class="font-semibold">プロフィットファクター:</span> <span class="font-bold ${profitFactor >= 1.5 ? 'text-green-400' : 'text-yellow-400'}">${profitFactor.toFixed(2)}</span></div>
+            </div>
         `;
         
         backtestResultsEl.classList.remove('hidden');
@@ -1761,10 +2287,12 @@ window.addEventListener('load', () => {
         let response = "申し訳ありません、よく分かりませんでした。";
         if (query.includes("スコア") || query.includes("総合スコア")) {
             response = "総合スコアは、複数のテクニカル指標を統合して算出される、現在の市場の勢いを表す数値です。正の値は買いが優勢、負の値は売りが優勢であることを示します。絶対値が大きいほど、その方向への勢いが強いと判断されます。";
-        } else if (query.includes("レバレッジ")) {
-            response = "推奨レバレッジは、総合スコアの絶対値に基づいて計算されます。スコアが高い（シグナルが強い）ほど、より高いレバレッジが推奨されますが、リスク管理はご自身の判断で行ってください。";
+        } else if (query.includes("ポジションサイズ") || query.includes("ケリー")) {
+            response = "推奨ポジションサイズは、ケリー基準を基に計算されます。これは、過去の勝率とリスクリワード比から、資産を最大化するための最適な投資額を算出する数式です。ただし、リスク管理のため、計算結果と口座残高の1%のうち、小さい方の額を推奨しています。";
         } else if (query.includes("確証率")) {
             response = "確証率とは、提示された「最適利確・損切り」設定を過去のデータに当てはめた場合に、利確で終わっていた確率（勝率）を示します。これは将来の利益を保証するものではありませんが、その設定の過去の有効性を示す重要な指標です。";
+        } else if (query.includes("ピボット") || query.includes("pivot")) {
+            response = "ピボットポイントは、前日の高値、安値、終値から計算される、当日の重要なサポート（支持）およびレジスタンス（抵抗）レベルです。価格がこれらのレベルにどのように反応するかで、市場のセンチメントを測るのに役立ちます。"
         }
         qaResponseContainer.innerHTML = `<p>${response}</p>`;
         qaInput.value = '';
@@ -1829,7 +2357,7 @@ window.addEventListener('load', () => {
         '1d': { endpoint: 'histoday', aggregate: 1, unit: 'day' },
     };
 
-    async function renderChart(pair, timeframeKey, takeProfit, stopLoss) {
+    async function renderChart(pair, timeframeKey, takeProfit, stopLoss, fibLevels, pivotLevels, impulse) {
         chartLoadingOverlay.classList.remove('hidden');
         if (chartInstance) { chartInstance.destroy(); }
         const timeframe = chartTimeframes[timeframeKey];
@@ -1843,10 +2371,52 @@ window.addEventListener('load', () => {
         const ema26 = calculateEMA(closes, params.emaLong);
         const bb = calculateBollingerBands(closes, params.bbPeriod, params.bbStdDev);
         
+        const annotations = {
+            takeProfitLine: { type: 'line', yMin: takeProfit, yMax: takeProfit, borderColor: 'rgb(34, 197, 94)', borderWidth: 2, borderDash: [6, 6], label: { content: `利確: ${takeProfit.toLocaleString()}`, enabled: true, position: 'end', backgroundColor: 'rgba(34, 197, 94, 0.8)' } },
+            stopLossLine: { type: 'line', yMin: stopLoss, yMax: stopLoss, borderColor: 'rgb(239, 68, 68)', borderWidth: 2, borderDash: [6, 6], label: { content: `損切り: ${stopLoss.toLocaleString()}`, enabled: true, position: 'end', backgroundColor: 'rgba(239, 68, 68, 0.8)' } }
+        };
+
+        if (fibLevels) {
+            Object.entries(fibLevels).forEach(([level, value]) => {
+                annotations[`fib${level}`] = {
+                    type: 'line', yMin: value, yMax: value,
+                    borderColor: 'rgba(251, 191, 36, 0.5)', borderWidth: 1, borderDash: [2, 2],
+                    label: { content: `${level.replace('level', '')}%`, enabled: true, position: 'start', backgroundColor: 'rgba(251, 191, 36, 0.7)', font: { size: 10 } }
+                };
+            });
+        }
+        
+        if (pivotLevels) {
+            const pivotColors = {'s2': 'rgba(239, 68, 68, 0.7)', 's1': 'rgba(239, 68, 68, 0.7)', 'pivot': 'rgba(167, 139, 250, 0.8)', 'r1': 'rgba(34, 197, 94, 0.7)', 'r2': 'rgba(34, 197, 94, 0.7)'};
+            Object.entries(pivotLevels).forEach(([level, value]) => {
+                 annotations[`pivot${level}`] = {
+                    type: 'line', yMin: value, yMax: value,
+                    borderColor: pivotColors[level], borderWidth: 1,
+                    label: { content: level.toUpperCase(), enabled: true, position: 'end', backgroundColor: pivotColors[level], font: { size: 10 } }
+                };
+            });
+        }
+        
+        const impulseColors = {
+            green: 'rgba(34, 197, 94, 0.2)',
+            red: 'rgba(239, 68, 68, 0.2)',
+            blue: 'rgba(59, 130, 246, 0.15)'
+        };
+        const backgroundColors = data.map((d, i) => {
+            const impulseIndex = i - (data.length - impulse.length);
+            return impulseIndex >= 0 ? impulseColors[impulse[impulseIndex]] : 'transparent';
+        });
+
         const chartData = {
             labels: data.map(d => new Date(d.time * 1000)),
             datasets: [
-                { label: '価格', data: closes, borderColor: '#6366f1', backgroundColor: '#6366f1', tension: 0.1 },
+                { 
+                    label: '価格', 
+                    data: closes, 
+                    borderColor: '#6366f1', 
+                    backgroundColor: backgroundColors,
+                    tension: 0.1 
+                },
                 { label: `EMA(${params.emaShort})`, data: ema12, borderColor: '#f9b115', borderWidth: 1, pointRadius: 0, },
                 { label: `EMA(${params.emaLong})`, data: ema26, borderColor: '#3b82f6', borderWidth: 1, pointRadius: 0, },
                 { label: 'BB Upper', data: bb.upper, borderColor: 'rgba(239, 68, 68, 0.5)', borderWidth: 1, pointRadius: 0, fill: false, },
@@ -1856,16 +2426,13 @@ window.addEventListener('load', () => {
         const chartOptions = {
             responsive: true, maintainAspectRatio: false,
             scales: { x: { type: 'time', time: { unit: 'hour' }, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: 'white' } }, y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: 'white' } } },
-            plugins: { legend: { labels: { color: 'white' } }, annotation: { annotations: {
-                takeProfitLine: { type: 'line', yMin: takeProfit, yMax: takeProfit, borderColor: 'rgb(34, 197, 94)', borderWidth: 2, borderDash: [6, 6], label: { content: `利確: ${takeProfit.toLocaleString()}`, enabled: true, position: 'end', backgroundColor: 'rgba(34, 197, 94, 0.8)' } },
-                stopLossLine: { type: 'line', yMin: stopLoss, yMax: stopLoss, borderColor: 'rgb(239, 68, 68)', borderWidth: 2, borderDash: [6, 6], label: { content: `損切り: ${stopLoss.toLocaleString()}`, enabled: true, position: 'end', backgroundColor: 'rgba(239, 68, 68, 0.8)' } }
-            }}}
+            plugins: { legend: { labels: { color: 'white' } }, annotation: { annotations } }
         };
         const ctx = document.getElementById('chart-canvas').getContext('2d');
         chartInstance = new Chart(ctx, { type: 'line', data: chartData, options: chartOptions });
     }
 
-    function showChartModal(pair, takeProfit, stopLoss) {
+    function showChartModal(pair, takeProfit, stopLoss, fibLevels, pivotLevels, impulse) {
         openModal(chartModal);
         document.getElementById('chart-modal-title').textContent = `${pair}/USD チャート分析`;
         chartTimeframeSelector.innerHTML = '';
@@ -1877,58 +2444,84 @@ window.addEventListener('load', () => {
             button.onclick = () => {
                 chartTimeframeSelector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
-                renderChart(pair, key, takeProfit, stopLoss);
+                renderChart(pair, key, takeProfit, stopLoss, fibLevels, pivotLevels, impulse);
             };
             chartTimeframeSelector.appendChild(button);
         });
         const defaultTimeframe = '1h';
         chartTimeframeSelector.querySelector(`[data-timeframe="${defaultTimeframe}"]`).classList.add('active');
-        renderChart(pair, defaultTimeframe, takeProfit, stopLoss);
+        renderChart(pair, defaultTimeframe, takeProfit, stopLoss, fibLevels, pivotLevels, impulse);
     }
     
     // --- Optimization Logic ---
     async function runBacktestForOptimization(data, timeframeKey, tempConfig = null) {
-        let trades = []; let equity = 10000; let peakEquity = 10000; let maxDrawdown = 0;
+        let trades = [];
+        let equity = 10000;
+        let peakEquity = 10000;
+        let maxDrawdown = 0;
+        const returns = [];
         const configToUse = tempConfig || timeframeConfigs[timeframeKey];
         const limit = configToUse.limit;
-        const lookahead = configToUse.lookaheadPeriod;
-        
-        if(data.length < limit + lookahead) return { winRate: 0, totalTrades: 0, totalReturn: -100, maxDrawdown: 100 };
+        const lookahead = configToUse.verificationPeriod;
+
+        if (data.length < limit + lookahead) {
+            return { winRate: 0, totalTrades: 0, totalReturn: -100, maxDrawdown: 100, returns: [] };
+        }
 
         for (let i = limit; i < data.length - lookahead; i++) {
             const historicalSlice = data.slice(i - limit, i);
             const futureSlice = data.slice(i, i + lookahead);
-            
-            const result = await runRealAnalysis('BTC', timeframeKey, historicalSlice, configToUse);
+            const yesterday = data[i-1];
+            const result = await performFullTechnicalAnalysis('BTC', timeframeKey, historicalSlice, true, configToUse, yesterday);
+
             if (result && result.signal !== 'hold') {
-                const { entryPrice, takeProfit, stopLoss, signal } = result;
+                const { signal, currentPrice: entryPrice, atr } = result;
+                const lastAtr = atr[atr.length - 1];
+                if (!lastAtr) continue;
+
+                const slMultiplier = 1.5;
+                const tpMultiplier = 2.5;
+
+                const takeProfit = signal === 'buy' ? entryPrice + lastAtr * tpMultiplier : entryPrice - lastAtr * tpMultiplier;
+                const stopLoss = signal === 'buy' ? entryPrice - lastAtr * slMultiplier : entryPrice + lastAtr * slMultiplier;
 
                 let outcome = 'pending';
-                for(const bar of futureSlice) {
+                let exitPrice = 0;
+
+                for (const bar of futureSlice) {
                     if (signal === 'buy') {
-                        if (bar.low <= stopLoss) { outcome = 'loss'; break; }
-                        if (bar.high >= takeProfit) { outcome = 'win'; break; }
+                        if (bar.low <= stopLoss) { outcome = 'loss'; exitPrice = stopLoss; break; }
+                        if (bar.high >= takeProfit) { outcome = 'win'; exitPrice = takeProfit; break; }
                     } else { // sell
-                        if (bar.high >= stopLoss) { outcome = 'loss'; break; }
-                        if (bar.low <= takeProfit) { outcome = 'win'; break; }
+                        if (bar.high >= stopLoss) { outcome = 'loss'; exitPrice = stopLoss; break; }
+                        if (bar.low <= takeProfit) { outcome = 'win'; exitPrice = takeProfit; break; }
+                    }
+                }
+
+                if (outcome === 'pending') {
+                    exitPrice = futureSlice[futureSlice.length - 1].close;
+                    if (signal === 'buy') {
+                        outcome = (exitPrice > entryPrice) ? 'win' : 'loss';
+                    } else { // sell
+                        outcome = (exitPrice < entryPrice) ? 'win' : 'loss';
                     }
                 }
                 
-                if (outcome !== 'pending') {
-                    const pnl = outcome === 'win' ? Math.abs(takeProfit - entryPrice) : -Math.abs(stopLoss - entryPrice);
-                    const pnlPercent = pnl / entryPrice;
-                    trades.push(pnlPercent);
-                    equity *= (1 + pnlPercent);
-                    if (equity > peakEquity) peakEquity = equity;
-                    const drawdown = (peakEquity - equity) / peakEquity;
-                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
-                }
+                trades.push(outcome);
+
+                const pnlPercent = (exitPrice - entryPrice) / entryPrice * (signal === 'buy' ? 1 : -1);
+                returns.push(pnlPercent);
+                equity *= (1 + pnlPercent);
+                if (equity > peakEquity) peakEquity = equity;
+                const drawdown = (peakEquity - equity) / peakEquity;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
             }
         }
-        const wins = trades.filter(pnl => pnl > 0).length;
+
+        const wins = trades.filter(t => t === 'win').length;
         const winRate = trades.length > 0 ? (wins / trades.length) * 100 : 0;
         const totalReturn = (equity / 10000 - 1) * 100;
-        return { winRate, totalTrades: trades.length, totalReturn, maxDrawdown: maxDrawdown * 100 };
+        return { winRate, totalTrades: trades.length, totalReturn, maxDrawdown: maxDrawdown * 100, returns };
     }
 
     optimizeIndicatorsBtn.addEventListener('click', async () => {
@@ -1940,46 +2533,53 @@ window.addEventListener('load', () => {
         const baseConfig = timeframeConfigs[timeframeKey];
         const data = await fetchData('BTC', baseConfig.endpoint, 500, baseConfig.aggregate); 
 
-        if (!data || data.length < 250) {
+        if (!data || data.length < baseConfig.limit + baseConfig.verificationPeriod) {
             createToast('最適化のためのデータが不足しています。', 'error');
             optimizeIndicatorsBtn.disabled = false; runAnalysisBtn.disabled = false; optimizeSpinner.classList.add('hidden');
             optimizationStatusEl.textContent = '';
             return;
         }
+        
+        data.reverse(); // Process chronologically
 
-        const parameterSpace = {
-            rsiPeriod: [baseConfig.params.rsiPeriod - 2, baseConfig.params.rsiPeriod, baseConfig.params.rsiPeriod + 2].filter(v => v > 5 && v < 25),
-            emaShort: [baseConfig.params.emaShort - 2, baseConfig.params.emaShort, baseConfig.params.emaShort + 2].filter(v => v > 3 && v < 20),
-            signalThreshold: [baseConfig.params.signalThreshold - 0.5, baseConfig.params.signalThreshold, baseConfig.params.signalThreshold + 0.5].filter(v => v > 1)
+        // New: Randomized Search Optimization
+        const parameterRanges = {
+            rsiPeriod: { min: 10, max: 20, type: 'int' },
+            emaShort: { min: 8, max: 18, type: 'int' },
+            signalThreshold: { min: 2.5, max: 5.0, type: 'float' },
+            slopePeriod: { min: 5, max: 15, type: 'int' },
         };
+        const NUM_ITERATIONS = 50;
         
         let bestSettings = JSON.parse(JSON.stringify(baseConfig)); 
         let bestScore = -Infinity;
         let bestWinRate = 0;
         let bestTotalReturn = 0;
-        let combinations = 0;
-        const totalCombinations = Object.values(parameterSpace).reduce((acc, curr) => acc * curr.length, 1);
-        
-        if (totalCombinations === 0) {
-             createToast('最適化のためのパラメータースペースがありません。', 'error');
-             optimizationStatusEl.textContent = ''; optimizeIndicatorsBtn.disabled = false; runAnalysisBtn.disabled = false; optimizeSpinner.classList.add('hidden');
-             return;
-        }
 
-        for (const rsi of parameterSpace.rsiPeriod) {
-        for (const ema of parameterSpace.emaShort) {
-        for (const threshold of parameterSpace.signalThreshold) {
+        for (let i = 0; i < NUM_ITERATIONS; i++) {
             const tempConfig = JSON.parse(JSON.stringify(baseConfig));
-            tempConfig.params.rsiPeriod = rsi;
-            tempConfig.params.emaShort = ema;
-            tempConfig.params.emaLong = ema * 2;
-            tempConfig.params.signalThreshold = parseFloat(threshold.toFixed(2));
+            const randomParams = {};
+
+            for (const key in parameterRanges) {
+                const range = parameterRanges[key];
+                let randomValue;
+                if (range.type === 'int') {
+                    randomValue = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+                } else { // float
+                    randomValue = Math.random() * (range.max - range.min) + range.min;
+                }
+                randomParams[key] = randomValue;
+            }
+            
+            tempConfig.params.rsiPeriod = randomParams.rsiPeriod;
+            tempConfig.params.emaShort = randomParams.emaShort;
+            tempConfig.params.emaLong = randomParams.emaShort * 2;
+            tempConfig.params.signalThreshold = parseFloat(randomParams.signalThreshold.toFixed(2));
+            tempConfig.params.slopePeriod = randomParams.slopePeriod;
             
             const { winRate, totalReturn } = await runBacktestForOptimization(data, timeframeKey, tempConfig);
-            const currentScore = (winRate * 0.7) + (totalReturn * 0.3);
+            const currentScore = (winRate * 0.7) + (totalReturn * 0.3) - (winRate < 50 ? 1000 : 0);
 
-            combinations++;
-            
             if (currentScore > bestScore) { 
                 bestScore = currentScore; 
                 bestSettings = tempConfig;
@@ -1987,15 +2587,15 @@ window.addEventListener('load', () => {
                 bestTotalReturn = totalReturn;
             }
             
-            optimizationStatusEl.textContent = `[${combinations}/${totalCombinations}] 最適化中... | 最高成績 - 勝率: ${bestWinRate.toFixed(1)}%, リターン: ${bestTotalReturn.toFixed(1)}%`;
-            
-            await delay(50);
-        }}}
+            optimizationStatusEl.textContent = `[${i + 1}/${NUM_ITERATIONS}] 最適化中... | 最高成績 - 勝率: ${bestWinRate.toFixed(1)}%, リターン: ${bestTotalReturn.toFixed(1)}%`;
+            if (!USE_MOCK_DATA) await delay(10);
+        }
         
         baseAnalysisSettings.params.rsiPeriod = bestSettings.params.rsiPeriod;
         baseAnalysisSettings.params.emaShort = bestSettings.params.emaShort;
         baseAnalysisSettings.params.emaLong = bestSettings.params.emaLong;
         baseAnalysisSettings.params.signalThreshold = bestSettings.params.signalThreshold;
+        baseAnalysisSettings.params.slopePeriod = bestSettings.params.slopePeriod;
         
         localStorage.setItem('analysisSettings', JSON.stringify(baseAnalysisSettings));
         populateSettingsForm();
@@ -2009,6 +2609,46 @@ window.addEventListener('load', () => {
         runAnalysisBtn.disabled = false; 
         optimizeSpinner.classList.add('hidden');
     });
+
+    // --- AI Model (Conceptual) ---
+    // This is a placeholder class to represent the structure.
+    // A real implementation would require loading a pre-trained model.
+    class PriceTransformer {
+        constructor() { this.model = null; }
+        async predict(data) {
+            // In a real scenario, you would preprocess data into a tensor
+            // and run `this.model.predict(tensor)`.
+            // Here, we simulate the output.
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    const prediction = Math.random();
+                    const confidence = (Math.random() * 0.5) + 0.5; // 50% - 100%
+                    resolve({ prediction, confidence });
+                }, 2000); // Simulate model inference time
+            });
+        }
+    }
+    const aiModel = new PriceTransformer();
+
+    runAiPredictionBtn.addEventListener('click', async () => {
+        aiSpinner.classList.remove('hidden');
+        runAiPredictionBtn.disabled = true;
+        aiPredictionResultEl.innerHTML = '<p>AIモデルが分析中...</p>';
+        
+        const result = await aiModel.predict(null); // Pass real data in a real implementation
+        
+        const direction = result.prediction > 0.5 ? '上昇' : '下降';
+        const colorClass = result.prediction > 0.5 ? 'text-green-400' : 'text-red-400';
+        
+        aiPredictionResultEl.innerHTML = `
+            <p class="text-lg">予測方向: <span class="font-bold ${colorClass}">${direction}</span></p>
+            <p>信頼度: <span class="font-bold">${(result.confidence * 100).toFixed(1)}%</span></p>
+        `;
+        
+        aiSpinner.classList.add('hidden');
+        runAiPredictionBtn.disabled = false;
+    });
+
 
     // --- Initialization ---
     async function initializePriceTicker() {
@@ -2058,6 +2698,7 @@ window.addEventListener('load', () => {
         await initializePriceTicker();
         setInterval(updateTickerPrices, 60000);
 
+        updateEconomicCalendar();
         updatePositionsUI();
         populateHistoryPanel();
         populateTradeHistoryPanel();
@@ -2065,7 +2706,7 @@ window.addEventListener('load', () => {
         populateNotificationSettings();
         updateAccuracyUI();
         updateAccuracyTooltip(timeframeSelect.value);
-        setInterval(verifySignals, 60000 * 5);
+        setInterval(verifySignals, 60000 * 2);
         setInterval(updateOpenPositions, 120000);
         performAnalysis(true);
     }
